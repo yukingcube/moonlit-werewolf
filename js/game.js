@@ -1365,7 +1365,8 @@
     if (sorted.length) {
       topCount = sorted[0][1];
       const tied = sorted.filter(([, c]) => c === topCount).map(([u]) => u);
-      topUid = GD.pickRandom(tied);
+      // 同数の場合は誰も処刑しない
+      if (tied.length === 1) topUid = tied[0];
     }
 
     let executedP = topUid ? findByUid(topUid) : null;

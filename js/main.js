@@ -921,9 +921,11 @@
     ui.morningSpeechesShown = 0;
     renderMorningSpeeches();
     const morningComplete = !!(data && data.morningComplete);
+    const meM = Game.self();
+    const deadM = !meM || !meM.alive;
     const btn = $('#readyMorningBtn');
-    btn.hidden = !morningComplete;
-    btn.disabled = !morningComplete;
+    btn.hidden = deadM || !morningComplete;
+    btn.disabled = deadM || !morningComplete;
     $('#morningReady').textContent = morningComplete ? '' : 'AIが発言中...';
   }
 
@@ -974,7 +976,8 @@
     const dead = !me || !me.alive;
     $('#messageInputArea').hidden = dead;
     $('#spectatorNotice').hidden = !dead;
-    $('#readyDiscussionBtn').textContent = dead ? '次へ' : '議論を終えて投票へ';
+    $('#readyDiscussionBtn').hidden = dead;
+    $('#readyDiscussionBtn').textContent = '議論を終えて投票へ';
     $('#readyDiscussionBtn').disabled = false;
 
     ui.sentMessages = [];
@@ -1181,10 +1184,12 @@
         <div class="execution-result-name">投票が割れた</div>`;
     }
     $('#executionStatus').textContent = '';
+    const meE = Game.self();
+    const deadE = !meE || !meE.alive;
     const btn = $('#readyExecutionBtn');
     if (btn) {
-      btn.hidden = false;
-      btn.disabled = false;
+      btn.hidden = deadE;
+      btn.disabled = deadE;
       btn.textContent = '確認して進む';
     }
   }
