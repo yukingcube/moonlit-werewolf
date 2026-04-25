@@ -108,6 +108,10 @@
     state.nightActions = {};
     state.started = false;
     state._localReady = {};
+    if (state._aiSpeechUnsub) {
+      try { state._aiSpeechUnsub(); } catch(_) {}
+    }
+    state._aiSpeechUnsub = null;
   }
 
   /* ============================================================
@@ -445,6 +449,33 @@
     });
   }
 
+  // ゲスト用: 指定日の AI 発言 (morning) を listen し、state.history へマージ
+  function subscribeMorningSpeeches(day) {
+    if (state._aiSpeechUnsub) {
+      try { state._aiSpeechUnsub(); } catch(_) {}
+      state._aiSpeechUnsub = null;
+    }
+    if (!day) return;
+    state._aiSpeechUnsub = FB.listenAiSpeeches(day, 'morning', (list) => {
+      const hist = ensureHistoryDay();
+      // 受信した発言のうち、まだローカルに無いものを追加
+      const have = new Set((hist.morningSpeeches || []).map(s => s.id || (s.uid + ':' + (s.at || s.speech))));
+      let appended = false;
+      for (const s of list) {
+        const key = s.id || (s.uid + ':' + (s.at || s.speech));
+        if (have.has(key)) continue;
+        hist.morningSpeeches = hist.morningSpeeches || [];
+        hist.morningSpeeches.push(s);
+        emit('onSpeechAdded', s);
+        appended = true;
+      }
+      if (appended) {
+        emit('onHistoryUpdate', state.history);
+        emit('onMorningProgress', { current: hist.morningSpeeches.length, total: aiPlayers().filter(p => p.alive).length });
+      }
+    });
+  }
+
   function ingestPlayersFromDb(playersData) {
     const list = [];
     for (const [uid, p] of Object.entries(playersData)) {
@@ -480,6 +511,7 @@
     if (typeof g.phaseVersion === 'number' && g.phaseVersion <= state.phaseVersion) return;
     state.phaseVersion = g.phaseVersion || 0;
     const oldPhase = state.phase;
+    const oldDay = state.day;
     const oldMorningComplete = !!(state.phaseData && state.phaseData.morningComplete);
     state.phase = g.phase || state.phase;
     state.phaseData = g.phaseData || null;
@@ -503,6 +535,14 @@
     }
     if (g.result) {
       state.result = g.result;
+    }
+
+    // ゲスト: 日付が変わったら AI 発言の listener を張り替える
+    if (state.mode === 'multi' && !state.isHost && state.day !== oldDay && state.day > 0) {
+      // 新しい日のため、ローカルの morningSpeeches をクリア (Firebase から再構築される)
+      const hist = state.history.find(h => h.day === state.day);
+      if (hist) hist.morningSpeeches = [];
+      subscribeMorningSpeeches(state.day);
     }
 
     emit('onPlayersUpdate', state.players);
@@ -898,41 +938,43 @@
     const livingAis = aiPlayers().filter(p => p.alive);
     const expectedCount = livingAis.length;
     emit('onMorningProgress', { current: 0, total: expectedCount });
+
+    // ホストのみ実行: AI発言を生成し、各発言を Firebase へ push する
     for (const ai of livingAis) {
       const ctx = buildCtx(ai);
+      let entry;
       try {
         await GD.sleep(CONFIG.MORNING_SPEECH_DELAY_MS);
         const res = await AI.generateMorningSpeech(ctx);
-        const entry = {
+        entry = {
           uid: ai.uid,
           name: ai.displayName,
           speech: res.speech,
           thought: res.thought,
           isHuman: false
         };
-        morningSpeeches.push(entry);
         recordThought(ai.uid, state.day, 'morning', res.thought);
-        emit('onSpeechAdded', entry);
-        emit('onHistoryUpdate', state.history);
-        emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
-        if (state.mode === 'multi' && state.isHost) {
-          await transitionMultiPhase(PHASES.MORNING, { day: state.day, morningComplete: false });
-        }
       } catch (err) {
         console.warn('morning speech error', ai.displayName, err);
-        const entry = {
+        entry = {
           uid: ai.uid,
           name: ai.displayName,
           speech: '...(声が出ない)',
           thought: '',
           error: true
         };
-        morningSpeeches.push(entry);
-        emit('onSpeechAdded', entry);
-        emit('onHistoryUpdate', state.history);
-        emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
-        if (state.mode === 'multi' && state.isHost) {
-          await transitionMultiPhase(PHASES.MORNING, { day: state.day, morningComplete: false });
+      }
+      // host のローカル state にも反映
+      morningSpeeches.push(entry);
+      emit('onSpeechAdded', entry);
+      emit('onHistoryUpdate', state.history);
+      emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
+      // マルチ: Firebase の専用パスへ送信(ゲストはこれを listen)
+      if (state.mode === 'multi' && state.isHost) {
+        try {
+          await FB.pushAiSpeech(state.day, 'morning', entry);
+        } catch (e) {
+          console.warn('pushAiSpeech failed', e);
         }
       }
     }

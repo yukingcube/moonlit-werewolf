@@ -355,6 +355,32 @@
     return out;
   }
 
+  /* ===== AI Speeches (host pushes; everyone reads) ===== */
+  async function pushAiSpeech(day, phase, entry) {
+    assertInRoom();
+    const F = fb();
+    const listRef = F.ref(F.db, `rooms/${state.roomId}/aiSpeeches/day${day}/${phase}`);
+    const newRef = F.push(listRef);
+    await F.set(newRef, { ...entry, at: Date.now() });
+  }
+
+  function listenAiSpeeches(day, phase, cb) {
+    assertInRoom();
+    return attach(`rooms/${state.roomId}/aiSpeeches/day${day}/${phase}`, (val) => {
+      if (!val) { cb([]); return; }
+      const list = Object.entries(val)
+        .map(([id, v]) => ({ id, ...v }))
+        .sort((a, b) => (a.at || 0) - (b.at || 0));
+      cb(list);
+    });
+  }
+
+  async function clearAiSpeeches(day) {
+    assertInRoom();
+    const F = fb();
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/aiSpeeches/day${day}`), null);
+  }
+
   /* ===== Night Actions ===== */
   async function submitNightAction(day, action) {
     assertInRoom();
@@ -391,6 +417,7 @@
     setReady, clearReady, waitAllReady,
     submitVote, getAllVotes, waitVotes,
     submitMessage, getAllMessages,
+    pushAiSpeech, listenAiSpeeches, clearAiSpeeches,
     submitNightAction, getAllNightActions,
     detachAll, reset
   };
