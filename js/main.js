@@ -175,9 +175,11 @@
     const iAmHost = !!FB.isHost && !!(meInList && meInList.isHost);
     if (iAmHost && count >= 1) {
       startBtn.hidden = false;
+      startBtn.style.display = '';
       startBtn.textContent = `ゲーム開始 (${count}人 + AI ${Math.max(0, CONFIG.TOTAL_PLAYERS - count)}人)`;
     } else {
       startBtn.hidden = true;
+      startBtn.style.display = 'none';
     }
   }
 
