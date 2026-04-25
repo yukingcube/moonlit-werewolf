@@ -129,17 +129,21 @@
 
   function setupLobbyListeners() {
     if (ui.cleanupLobby) { try { ui.cleanupLobby(); } catch(_) {} ui.cleanupLobby = null; }
+    let guestStartTriggered = false;
     const unsub1 = FB.listenPlayers((list) => {
       lobbyMembers = list;
       renderLobby(list);
     });
     const unsub2 = FB.listenMeta((meta) => {
       if (!meta) return;
-      if (meta.status === 'playing') {
-        // ゲスト: ホストがゲーム開始した
-        if (!FB.isHost) {
-          handleGuestGameStart();
-        }
+      // ゲスト側: ホストが AI 生成中の間、ローディング表示を継続
+      if (meta.status === 'generating' && !FB.isHost) {
+        showLoading('AIキャラクターを召喚中...', 'ホストが準備しています');
+        return;
+      }
+      if (meta.status === 'playing' && !FB.isHost && !guestStartTriggered) {
+        guestStartTriggered = true;
+        handleGuestGameStart();
       }
     });
     ui.cleanupLobby = () => { try { unsub1(); } catch(_) {} try { unsub2(); } catch(_) {} };
@@ -252,11 +256,13 @@
      ============================================================ */
   async function handleGuestGameStart() {
     if (ui.cleanupLobby) { try { ui.cleanupLobby(); } catch(_) {} ui.cleanupLobby = null; }
-    showLoading('ゲームに参加中...', 'ホストの準備を待っています');
+    showLoading('AIキャラクターを召喚中...', 'ホストの生成完了を待っています');
     try {
-      await Game.joinAsGuest(FB.roomId, getPlayerName());
+      // joinAsGuest 内 listenGame の初回 fire で onPhaseChange (CHARACTERS) が発火し、
+      // handlePhaseChange 側でローディングを解除する。
+      // そのためフックを先に登録しておく。
       attachGameHooks();
-      showLoading(null);
+      await Game.joinAsGuest(FB.roomId, getPlayerName());
     } catch (err) {
       showLoading(null);
       showError(humanizeError(err));

@@ -380,6 +380,9 @@
     state.selfUid = FB.uid;
     state.selfName = playerName;
 
+    // ゲストにも「AI生成中」状態を即時通知 (ゲスト側でローディング表示を継続させる)
+    await FB.setMetaStatus('generating');
+
     // human players (from lobby)
     const humansList = allHumans.map(h => ({
       uid: h.uid, name: h.name, joinedAt: h.joinedAt || Date.now()
@@ -420,10 +423,13 @@
       };
     }
     await FB.setAllRoles(rolesByUid);
+
+    // フェーズを CHARACTERS に進めてから 'playing' を立てる
+    // (ゲストが 'playing' 検知して join した瞬間に game.phase が確定済みになるよう順序を保証)
+    await transitionMultiPhase(PHASES.CHARACTERS);
     await FB.setMetaStatus('playing');
 
     loading(null);
-    await transitionMultiPhase(PHASES.CHARACTERS);
   }
 
   /* ============================================================
