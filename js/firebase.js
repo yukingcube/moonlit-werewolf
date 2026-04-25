@@ -355,30 +355,55 @@
     return out;
   }
 
-  /* ===== AI Speeches (host pushes; everyone reads) ===== */
-  async function pushAiSpeech(day, phase, entry) {
+  /* ===== Day History (host writes; everyone reads) =====
+     Path: rooms/{roomId}/history/day{N}/
+       nightResults: { attackedUid, attackedName, peace }
+       morningSpeeches/{pushId}: { uid, name, speech, thought, error?, at }
+       fortuneResults/{seerUid}: { targetUid, targetName, result, at }
+       votes/{voterUid}: { fromUid, fromName, toUid, toName }
+       execution: { executedUid, executedName, executedRole }
+  ============================================================ */
+  async function setDayNightResults(day, data) {
     assertInRoom();
     const F = fb();
-    const listRef = F.ref(F.db, `rooms/${state.roomId}/aiSpeeches/day${day}/${phase}`);
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/history/day${day}/nightResults`), data);
+  }
+
+  async function pushDayMorningSpeech(day, entry) {
+    assertInRoom();
+    const F = fb();
+    const listRef = F.ref(F.db, `rooms/${state.roomId}/history/day${day}/morningSpeeches`);
     const newRef = F.push(listRef);
     await F.set(newRef, { ...entry, at: Date.now() });
   }
 
-  function listenAiSpeeches(day, phase, cb) {
-    assertInRoom();
-    return attach(`rooms/${state.roomId}/aiSpeeches/day${day}/${phase}`, (val) => {
-      if (!val) { cb([]); return; }
-      const list = Object.entries(val)
-        .map(([id, v]) => ({ id, ...v }))
-        .sort((a, b) => (a.at || 0) - (b.at || 0));
-      cb(list);
-    });
-  }
-
-  async function clearAiSpeeches(day) {
+  async function setDayFortune(day, seerUid, data) {
     assertInRoom();
     const F = fb();
-    await F.set(F.ref(F.db, `rooms/${state.roomId}/aiSpeeches/day${day}`), null);
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/history/day${day}/fortuneResults/${seerUid}`), { ...data, at: Date.now() });
+  }
+
+  async function setDayVotes(day, votesByVoter) {
+    assertInRoom();
+    const F = fb();
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/history/day${day}/votes`), votesByVoter);
+  }
+
+  async function setDayExecution(day, data) {
+    assertInRoom();
+    const F = fb();
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/history/day${day}/execution`), data);
+  }
+
+  function listenDayHistory(day, cb) {
+    assertInRoom();
+    return attach(`rooms/${state.roomId}/history/day${day}`, (val) => cb(val || null));
+  }
+
+  async function clearDayHistory(day) {
+    assertInRoom();
+    const F = fb();
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/history/day${day}`), null);
   }
 
   /* ===== Night Actions ===== */
@@ -417,7 +442,8 @@
     setReady, clearReady, waitAllReady,
     submitVote, getAllVotes, waitVotes,
     submitMessage, getAllMessages,
-    pushAiSpeech, listenAiSpeeches, clearAiSpeeches,
+    setDayNightResults, pushDayMorningSpeech, setDayFortune, setDayVotes, setDayExecution,
+    listenDayHistory, clearDayHistory,
     submitNightAction, getAllNightActions,
     detachAll, reset
   };

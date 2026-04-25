@@ -108,21 +108,40 @@
     state.nightActions = {};
     state.started = false;
     state._localReady = {};
-    if (state._aiSpeechUnsub) {
-      try { state._aiSpeechUnsub(); } catch(_) {}
+    if (state._dayHistoryUnsub) {
+      try { state._dayHistoryUnsub(); } catch(_) {}
     }
-    state._aiSpeechUnsub = null;
+    state._dayHistoryUnsub = null;
   }
 
   /* ============================================================
      ロール配布 (仕様書 ROLE_COUNTS)
      ============================================================ */
   function assignRoles(players) {
+    // uid 重複チェック (誤って同じ uid を 2 度渡されると役職衝突する)
+    const seenUids = new Set();
+    for (const p of players) {
+      if (!p.uid) throw new Error(`PLAYER_MISSING_UID: ${JSON.stringify(p)}`);
+      if (seenUids.has(p.uid)) {
+        throw new Error(`DUPLICATE_PLAYER_UID: ${p.uid} (${p.name})`);
+      }
+      seenUids.add(p.uid);
+    }
     const pool = GD.shuffleArray(GD.buildRolePool());
     if (pool.length !== players.length) {
       throw new Error(`ROLE_POOL_MISMATCH: pool=${pool.length}, players=${players.length}`);
     }
-    return players.map((p, i) => ({ ...p, role: pool[i] }));
+    const assigned = players.map((p, i) => ({ ...p, role: pool[i] }));
+    // 配布結果のサニティチェック (各役職が ROLE_COUNTS と一致しているか)
+    const counts = {};
+    for (const p of assigned) counts[p.role] = (counts[p.role] || 0) + 1;
+    for (const [role, expected] of Object.entries(CONFIG.ROLE_COUNTS)) {
+      if ((counts[role] || 0) !== expected) {
+        throw new Error(`ROLE_DIST_MISMATCH: ${role}=${counts[role] || 0} expected=${expected}`);
+      }
+    }
+    console.info('[assignRoles]', assigned.map(p => `${p.displayName || p.name}:${p.role}`).join(', '));
+    return assigned;
   }
 
   /* ============================================================
@@ -449,31 +468,73 @@
     });
   }
 
-  // ゲスト用: 指定日の AI 発言 (morning) を listen し、state.history へマージ
-  function subscribeMorningSpeeches(day) {
-    if (state._aiSpeechUnsub) {
-      try { state._aiSpeechUnsub(); } catch(_) {}
-      state._aiSpeechUnsub = null;
+  // ゲスト用: 指定日の history (夜結果, 朝発言, 占い結果, 投票, 処刑) を listen し state.history を再構築
+  function subscribeDayHistory(day) {
+    if (state._dayHistoryUnsub) {
+      try { state._dayHistoryUnsub(); } catch(_) {}
+      state._dayHistoryUnsub = null;
     }
     if (!day) return;
-    state._aiSpeechUnsub = FB.listenAiSpeeches(day, 'morning', (list) => {
-      const hist = ensureHistoryDay();
-      // 受信した発言のうち、まだローカルに無いものを追加
-      const have = new Set((hist.morningSpeeches || []).map(s => s.id || (s.uid + ':' + (s.at || s.speech))));
-      let appended = false;
-      for (const s of list) {
-        const key = s.id || (s.uid + ':' + (s.at || s.speech));
-        if (have.has(key)) continue;
-        hist.morningSpeeches = hist.morningSpeeches || [];
-        hist.morningSpeeches.push(s);
-        emit('onSpeechAdded', s);
-        appended = true;
-      }
-      if (appended) {
-        emit('onHistoryUpdate', state.history);
-        emit('onMorningProgress', { current: hist.morningSpeeches.length, total: aiPlayers().filter(p => p.alive).length });
-      }
+    state._dayHistoryUnsub = FB.listenDayHistory(day, (val) => {
+      hydrateDayHistoryFromFirebase(day, val);
     });
+  }
+
+  function hydrateDayHistoryFromFirebase(day, val) {
+    state.day = day;
+    const hist = ensureHistoryDay();
+    const oldSpeechCount = (hist.morningSpeeches || []).length;
+
+    // night results
+    if (val && val.nightResults) {
+      hist.attackedUid = val.nightResults.attackedUid || null;
+      hist.attackedName = val.nightResults.attackedName || null;
+      hist.peace = !!val.nightResults.peace;
+    }
+
+    // morning speeches (Firebase は object なので at 順で配列化)
+    if (val && val.morningSpeeches) {
+      const list = Object.entries(val.morningSpeeches)
+        .map(([id, v]) => ({ id, ...v }))
+        .sort((a, b) => (a.at || 0) - (b.at || 0));
+      hist.morningSpeeches = list;
+    } else {
+      hist.morningSpeeches = [];
+    }
+
+    // fortune results
+    if (val && val.fortuneResults) {
+      hist.fortuneResultsBy = val.fortuneResults;
+    }
+
+    // votes
+    if (val && val.votes) {
+      const arr = [];
+      for (const [voterUid, v] of Object.entries(val.votes)) {
+        arr.push({ fromUid: voterUid, fromName: v.fromName, toUid: v.toUid, toName: v.toName });
+      }
+      hist.votes = arr;
+    }
+
+    // execution
+    if (val && val.execution) {
+      hist.executedUid = val.execution.executedUid || null;
+      hist.executedName = val.execution.executedName || null;
+      hist.executedRole = val.execution.executedRole || null;
+    }
+
+    // 新着の morning speech があれば onSpeechAdded を発火
+    const newCount = hist.morningSpeeches.length;
+    if (newCount > oldSpeechCount) {
+      for (let i = oldSpeechCount; i < newCount; i++) {
+        emit('onSpeechAdded', hist.morningSpeeches[i]);
+      }
+    }
+    emit('onHistoryUpdate', state.history);
+    if (state.phase === PHASES.MORNING) {
+      const total = aiPlayers().filter(p => p.alive).length;
+      emit('onMorningProgress', { current: newCount, total });
+    }
   }
 
   function ingestPlayersFromDb(playersData) {
@@ -516,10 +577,9 @@
     state.phase = g.phase || state.phase;
     state.phaseData = g.phaseData || null;
 
-    // history / day / players(alive,role) 同期
+    // day / alive / role reveal を同期 (history は別経路)
     if (g.phaseData) {
       if (typeof g.phaseData.day === 'number') state.day = g.phaseData.day;
-      if (Array.isArray(g.phaseData.history)) state.history = g.phaseData.history;
       if (g.phaseData.alive) {
         for (const [uid, alive] of Object.entries(g.phaseData.alive)) {
           const p = findByUid(uid);
@@ -537,12 +597,9 @@
       state.result = g.result;
     }
 
-    // ゲスト: 日付が変わったら AI 発言の listener を張り替える
+    // ゲスト: 日付が変わったら history/dayN listener を張り替える
     if (state.mode === 'multi' && !state.isHost && state.day !== oldDay && state.day > 0) {
-      // 新しい日のため、ローカルの morningSpeeches をクリア (Firebase から再構築される)
-      const hist = state.history.find(h => h.day === state.day);
-      if (hist) hist.morningSpeeches = [];
-      subscribeMorningSpeeches(state.day);
+      subscribeDayHistory(state.day);
     }
 
     emit('onPlayersUpdate', state.players);
@@ -569,20 +626,14 @@
   async function transitionMultiPhase(phase, data = null) {
     state.phase = phase;
     state.phaseData = data;
-    const payload = data ? GD.deepClone(data) : null;
-    if (payload) {
-      // alive map と history を同期
-      payload.day = state.day;
-      payload.alive = {};
-      for (const p of state.players) payload.alive[p.uid] = p.alive;
-      payload.history = state.history;
-    } else {
-      const aliveMap = {};
-      for (const p of state.players) aliveMap[p.uid] = p.alive;
-      data = { day: state.day, alive: aliveMap, history: state.history };
-    }
-    await FB.setPhase(phase, payload || data);
-    emit('onPhaseChange', phase, payload || data);
+    // history はもはや phaseData に含めない (history/day{N}/* に分離保管)
+    // alive map のみ同期 (軽量)
+    const payload = data ? GD.deepClone(data) : {};
+    payload.day = state.day;
+    payload.alive = {};
+    for (const p of state.players) payload.alive[p.uid] = p.alive;
+    await FB.setPhase(phase, payload);
+    emit('onPhaseChange', phase, payload);
   }
 
   async function setPhase(phase, data = null) {
@@ -824,6 +875,25 @@
       hist.peace = true;
     }
 
+    // マルチ: 夜の結果を Firebase へ
+    if (state.mode === 'multi' && state.isHost) {
+      try {
+        await FB.setDayNightResults(state.day, {
+          attackedUid: hist.attackedUid,
+          attackedName: hist.attackedName,
+          peace: !!hist.peace
+        });
+        // 占い結果も Firebase へ (seerUid 別)
+        if (hist.fortuneResultsBy) {
+          for (const [seerUid, fr] of Object.entries(hist.fortuneResultsBy)) {
+            await FB.setDayFortune(state.day, seerUid, fr);
+          }
+        }
+      } catch (e) {
+        console.warn('setDayNightResults failed', e);
+      }
+    }
+
     emit('onPlayersUpdate', state.players);
     emit('onHistoryUpdate', state.history);
   }
@@ -969,12 +1039,12 @@
       emit('onSpeechAdded', entry);
       emit('onHistoryUpdate', state.history);
       emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
-      // マルチ: Firebase の専用パスへ送信(ゲストはこれを listen)
+      // マルチ: Firebase の history/dayN/morningSpeeches パスへ送信
       if (state.mode === 'multi' && state.isHost) {
         try {
-          await FB.pushAiSpeech(state.day, 'morning', entry);
+          await FB.pushDayMorningSpeech(state.day, entry);
         } catch (e) {
-          console.warn('pushAiSpeech failed', e);
+          console.warn('pushDayMorningSpeech failed', e);
         }
       }
     }
@@ -1128,6 +1198,19 @@
     }
     hist.votes = voteEntries;
 
+    // マルチ: 投票結果を Firebase へ
+    if (state.mode === 'multi' && state.isHost) {
+      try {
+        const votesByVoter = {};
+        for (const v of voteEntries) {
+          votesByVoter[v.fromUid] = { fromName: v.fromName, toUid: v.toUid, toName: v.toName };
+        }
+        await FB.setDayVotes(state.day, votesByVoter);
+      } catch (e) {
+        console.warn('setDayVotes failed', e);
+      }
+    }
+
     emit('onHistoryUpdate', state.history);
   }
 
@@ -1219,6 +1302,19 @@
       hist.executedUid = null;
       hist.executedName = null;
       hist.executedRole = null;
+    }
+
+    // マルチ: 処刑結果を Firebase へ
+    if (state.mode === 'multi' && state.isHost) {
+      try {
+        await FB.setDayExecution(state.day, {
+          executedUid: hist.executedUid,
+          executedName: hist.executedName,
+          executedRole: hist.executedRole
+        });
+      } catch (e) {
+        console.warn('setDayExecution failed', e);
+      }
     }
 
     // 霊媒師に結果を渡す (history 経由で次回参照)
