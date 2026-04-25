@@ -171,7 +171,9 @@
       status.textContent = `仲間を待っています... (${count}/${CONFIG.TOTAL_PLAYERS})`;
     }
     const startBtn = $('#startGameBtn');
-    if (FB.isHost && count >= 1) {
+    const meInList = list.find(p => p.uid === FB.uid);
+    const iAmHost = !!FB.isHost && !!(meInList && meInList.isHost);
+    if (iAmHost && count >= 1) {
       startBtn.hidden = false;
       startBtn.textContent = `ゲーム開始 (${count}人 + AI ${Math.max(0, CONFIG.TOTAL_PLAYERS - count)}人)`;
     } else {
@@ -1282,6 +1284,7 @@
           copyRoomId();
           break;
         case 'start-game':
+          if (!FB.isHost) { toast('ゲームを開始できるのはホストのみです'); return; }
           startGameAsHost();
           break;
         case 'ready-characters':

@@ -179,10 +179,13 @@
     if (!me) return {};
     const info = {};
     if (me.role === 'werewolf') {
-      const teammates = state.players
-        .filter(p => p.role === 'werewolf' && p.uid !== me.uid)
-        .map(p => p.displayName);
-      info.teammateNames = teammates;
+      if (Array.isArray(me.teammateNames) && me.teammateNames.length) {
+        info.teammateNames = me.teammateNames.slice();
+      } else {
+        info.teammateNames = state.players
+          .filter(p => p.role === 'werewolf' && p.uid !== me.uid)
+          .map(p => p.displayName);
+      }
     } else if (me.role === 'seer') {
       info.fortuneResults = collectFortuneHistory(me.uid);
     } else if (me.role === 'medium') {
@@ -462,6 +465,7 @@
       const me = self();
       if (me) {
         me.role = roleData.role;
+        if (roleData.role === 'werewolf') me.teammateNames = roleData.teammateNames || [];
         const info = {};
         if (roleData.role === 'werewolf') info.teammateNames = roleData.teammateNames || [];
         emit('onRoleAssigned', roleData.role, info);
@@ -564,6 +568,9 @@
       const me = self();
       if (me) {
         me.role = state._pendingRoleData.role;
+        if (state._pendingRoleData.role === 'werewolf') {
+          me.teammateNames = state._pendingRoleData.teammateNames || [];
+        }
         const info = {};
         if (state._pendingRoleData.role === 'werewolf') {
           info.teammateNames = state._pendingRoleData.teammateNames || [];
