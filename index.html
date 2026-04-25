@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>月夜の村に狼が来る | Moonlit Village Werewolf</title>
+<meta name="description" content="AIを操る人狼 - Moonlit Village Werewolf">
+<meta name="theme-color" content="#0a0612">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div id="app">
+  <div class="bg-overlay" aria-hidden="true"></div>
+
+  <!-- ============ Title ============ -->
+  <section class="screen screen-title" data-screen="title">
+    <div class="title-container">
+      <div class="moon" aria-hidden="true"></div>
+      <h1 class="main-title">
+        <span class="main-title-jp">月夜の村に狼が来る</span>
+        <span class="main-title-en">Moonlit Village Werewolf</span>
+      </h1>
+      <p class="tagline">— AIを操る人狼 —</p>
+      <div class="title-actions">
+        <button class="btn btn-primary" data-action="start">ゲームを始める</button>
+        <button class="btn btn-secondary" data-action="goto-settings">設定</button>
+      </div>
+      <div class="version-tag">v0.5 / Life is Tech! School Cup 2026</div>
+    </div>
+  </section>
+
+  <!-- ============ Settings ============ -->
+  <section class="screen" data-screen="settings" hidden>
+    <header class="screen-header">
+      <button class="btn-back" data-action="goto-title" aria-label="戻る">←</button>
+      <h2 class="screen-title">設定</h2>
+    </header>
+    <div class="form-group">
+      <label for="apiKeyInput">Gemini APIキー</label>
+      <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off" spellcheck="false">
+      <p class="help-text">
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料取得(ホストのみ必要)
+      </p>
+    </div>
+    <div class="form-group">
+      <label for="playerNameInput">プレイヤー名</label>
+      <input type="text" id="playerNameInput" placeholder="村人" maxlength="12" autocomplete="off">
+      <p class="help-text">12文字まで</p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="save-settings">保存</button>
+    </div>
+  </section>
+
+  <!-- ============ Mode Select ============ -->
+  <section class="screen" data-screen="mode" hidden>
+    <header class="screen-header">
+      <button class="btn-back" data-action="goto-title" aria-label="戻る">←</button>
+      <h2 class="screen-title">モード選択</h2>
+    </header>
+    <div class="mode-grid">
+      <button class="mode-card" data-action="mode-solo">
+        <div class="mode-icon">★</div>
+        <div class="mode-title">1人プレイ</div>
+        <div class="mode-desc">あなた + AI 6人</div>
+      </button>
+      <button class="mode-card" data-action="mode-multi">
+        <div class="mode-icon">♞</div>
+        <div class="mode-title">マルチプレイ</div>
+        <div class="mode-desc">2〜7人 + AI</div>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ Room ============ -->
+  <section class="screen" data-screen="room" hidden>
+    <header class="screen-header">
+      <button class="btn-back" data-action="goto-mode" aria-label="戻る">←</button>
+      <h2 class="screen-title">マルチプレイ</h2>
+    </header>
+    <div class="room-section">
+      <h3 class="section-title">ルームを作成</h3>
+      <p class="help-text">ホストとしてルームを作成します(APIキー必要)</p>
+      <button class="btn btn-primary w-full" data-action="create-room">新規ルーム作成</button>
+    </div>
+    <div class="divider"><span>または</span></div>
+    <div class="room-section">
+      <h3 class="section-title">ルームに参加</h3>
+      <div class="form-group">
+        <label for="roomIdInput">ルームID(6桁)</label>
+        <input type="text" id="roomIdInput" placeholder="123456" maxlength="6" inputmode="numeric" autocomplete="off">
+      </div>
+      <button class="btn w-full" data-action="join-room">参加する</button>
+    </div>
+  </section>
+
+  <!-- ============ Lobby ============ -->
+  <section class="screen" data-screen="lobby" hidden>
+    <header class="screen-header">
+      <button class="btn-back" data-action="leave-room" aria-label="戻る">←</button>
+      <h2 class="screen-title">ロビー</h2>
+    </header>
+    <div class="room-id-display">
+      <span class="label">ルームID</span>
+      <span class="value" id="lobbyRoomId">------</span>
+      <button class="btn-icon" data-action="copy-room-id" title="コピー" aria-label="コピー">⎘</button>
+    </div>
+    <div class="player-list" id="lobbyPlayerList"></div>
+    <p class="help-text center" id="lobbyStatus">仲間を待っています...</p>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="start-game" id="startGameBtn" hidden>ゲーム開始</button>
+    </div>
+  </section>
+
+  <!-- ============ Characters ============ -->
+  <section class="screen" data-screen="characters" hidden>
+    <header class="screen-header">
+      <h2 class="screen-title">村の住人たち</h2>
+    </header>
+    <p class="screen-subtitle">今宵、月夜の村に集いし者たち</p>
+    <div class="character-grid" id="characterGrid"></div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-characters" id="readyCharactersBtn">準備完了</button>
+    </div>
+    <div class="ready-status" id="charactersReady"></div>
+  </section>
+
+  <!-- ============ Role ============ -->
+  <section class="screen" data-screen="role" hidden>
+    <header class="screen-header">
+      <h2 class="screen-title">役職確認</h2>
+    </header>
+    <p class="screen-subtitle">カードをタップして、あなたの役職を確認</p>
+    <div class="role-reveal" id="roleReveal">
+      <div class="role-card" id="roleCard" tabindex="0" role="button" aria-label="役職を確認">
+        <div class="role-card-face role-card-back">
+          <div class="role-card-back-label">月夜の啓示</div>
+          <div class="role-card-back-hint">タップで確認</div>
+        </div>
+        <div class="role-card-face role-card-front">
+          <div class="role-icon" id="roleIcon"></div>
+          <div class="role-name" id="roleName"></div>
+          <div class="role-team" id="roleTeam"></div>
+          <div class="role-description" id="roleDescription"></div>
+          <div class="role-teammates" id="roleTeammates"></div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-role" id="readyRoleBtn" disabled>準備完了</button>
+    </div>
+    <div class="ready-status" id="roleReady"></div>
+  </section>
+
+  <!-- ============ Night ============ -->
+  <section class="screen" data-screen="night" hidden>
+    <div class="phase-banner night-banner">
+      <div class="phase-banner-day" id="nightDayLabel">DAY 1</div>
+      <div class="phase-banner-title">夜</div>
+      <div class="phase-banner-sub">闇が村を包む...</div>
+    </div>
+    <div class="night-action" id="nightAction"></div>
+    <p class="night-status" id="nightStatus"></p>
+  </section>
+
+  <!-- ============ Morning ============ -->
+  <section class="screen" data-screen="morning" hidden>
+    <div class="phase-banner morning-banner">
+      <div class="phase-banner-day" id="morningDayLabel">DAY 1</div>
+      <div class="phase-banner-title">朝</div>
+      <div class="phase-banner-sub">夜が明けた...</div>
+    </div>
+    <div class="attack-result" id="attackResult"></div>
+    <div class="speech-log" id="morningSpeeches"></div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-morning" id="readyMorningBtn" hidden>議論へ</button>
+    </div>
+    <div class="ready-status" id="morningReady"></div>
+  </section>
+
+  <!-- ============ Discussion ============ -->
+  <section class="screen" data-screen="discussion" hidden>
+    <div class="discussion-header">
+      <div class="phase-banner-day" id="discussionDayLabel">DAY 1</div>
+      <div class="timer" id="discussionTimer">03:00</div>
+    </div>
+    <div class="speech-log discussion-log" id="discussionLog"></div>
+    <div class="message-input" id="messageInputArea">
+      <div class="message-input-title">AIへ秘密の伝言</div>
+      <select id="messageTargetSelect" class="select" aria-label="伝言の送信先"></select>
+      <textarea id="messageTextInput" class="textarea" maxlength="100" placeholder="(例)あの人が怪しいよ"></textarea>
+      <div class="message-input-actions">
+        <button class="btn btn-sm" data-action="send-message" id="sendMessageBtn">送信</button>
+        <span class="message-char-count"><span id="messageCharCount">0</span>/100</span>
+      </div>
+      <div class="sent-messages" id="sentMessages"></div>
+    </div>
+    <div class="spectator-notice" id="spectatorNotice" hidden>
+      あなたは亡くなりました。観戦モードです。
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-discussion" id="readyDiscussionBtn">議論を終えて投票へ</button>
+    </div>
+    <div class="ready-status" id="discussionReady"></div>
+  </section>
+
+  <!-- ============ Vote ============ -->
+  <section class="screen" data-screen="vote" hidden>
+    <div class="phase-banner vote-banner">
+      <div class="phase-banner-day" id="voteDayLabel">DAY 1</div>
+      <div class="phase-banner-title">投票</div>
+    </div>
+    <p class="screen-subtitle">処刑する者を選べ</p>
+    <div class="vote-grid" id="voteGrid"></div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="confirm-vote" id="confirmVoteBtn" disabled>投票する</button>
+    </div>
+    <div class="vote-spectator" id="voteSpectator" hidden>
+      <p class="spectator-notice">あなたは亡くなりました。投票はできません。</p>
+    </div>
+    <div class="ready-status" id="voteReady"></div>
+  </section>
+
+  <!-- ============ Execution ============ -->
+  <section class="screen" data-screen="execution" hidden>
+    <div class="phase-banner execution-banner">
+      <div class="phase-banner-day" id="executionDayLabel">DAY 1</div>
+      <div class="phase-banner-title">処刑</div>
+    </div>
+    <div class="vote-detail" id="voteDetail"></div>
+    <div class="vote-summary" id="voteSummary"></div>
+    <div class="execution-result" id="executionResult"></div>
+    <p class="execution-status" id="executionStatus"></p>
+  </section>
+
+  <!-- ============ Result ============ -->
+  <section class="screen" data-screen="result" hidden>
+    <div class="result-container">
+      <div class="result-title">— ゲーム終了 —</div>
+      <div class="result-winner" id="resultWinner"></div>
+      <div class="result-reason" id="resultReason"></div>
+      <div class="result-roles" id="resultRoles"></div>
+      <div class="actions">
+        <button class="btn btn-secondary w-full" data-action="view-thoughts">AIの裏の思考を見る</button>
+        <button class="btn btn-primary w-full" data-action="play-again">もう一度遊ぶ</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Thought Log ============ -->
+  <section class="screen" data-screen="thought-log" hidden>
+    <header class="screen-header">
+      <button class="btn-back" data-action="back-to-result" aria-label="戻る">←</button>
+      <h2 class="screen-title">AI 裏の思考</h2>
+    </header>
+    <p class="screen-subtitle">AIたちが内心で何を考えていたのか</p>
+    <div class="thought-log" id="thoughtLog"></div>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="goto-title">タイトルへ戻る</button>
+    </div>
+  </section>
+
+  <!-- ============ Loading Overlay ============ -->
+  <div class="overlay" id="loadingOverlay" hidden>
+    <div class="overlay-content">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-message" id="loadingMessage">読み込み中...</p>
+      <p class="loading-sub" id="loadingSubMessage"></p>
+    </div>
+  </div>
+
+  <!-- ============ Error Dialog ============ -->
+  <div class="overlay" id="errorDialog" hidden>
+    <div class="dialog">
+      <h3 class="dialog-title" id="errorTitle">エラー</h3>
+      <p class="dialog-message" id="errorMessage"></p>
+      <div class="actions">
+        <button class="btn btn-primary w-full" data-action="close-error">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Toast ============ -->
+  <div class="toast" id="toast" hidden></div>
+</div>
+
+<!-- Firebase (ESM) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+  import {
+    getDatabase, ref, set, get, onValue, off, update, remove,
+    push, serverTimestamp, onDisconnect, child
+  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+  import {
+    getAuth, signInAnonymously, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDOQgdZ9c1f0SWIYwC595s9zk1zrT0vhGQ",
+    authDomain: "moonlit-werewolf.firebaseapp.com",
+    databaseURL: "https://moonlit-werewolf-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "moonlit-werewolf",
+    appId: "1:100215922434:web:eb51b52c5f4b528a1d6c1b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+
+  window.__FB = {
+    app, db, auth,
+    ref, set, get, onValue, off, update, remove, push, serverTimestamp, onDisconnect, child,
+    signInAnonymously, onAuthStateChanged
+  };
+
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<script src="js/gameData.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/firebase.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
