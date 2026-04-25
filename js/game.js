@@ -770,6 +770,8 @@
 
     for (const ai of ais) {
       tasks.push((async () => {
+        // 初日: 人狼の襲撃と騎士の護衛は行わない
+        if (state.day === 1 && (ai.role === 'werewolf' || ai.role === 'knight')) return;
         const ctx = buildCtx(ai);
         try {
           if (ai.role === 'werewolf') {

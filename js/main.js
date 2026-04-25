@@ -681,6 +681,22 @@
     }
 
     const role = me.role;
+    if (day === 1 && (role === 'werewolf' || role === 'knight')) {
+      appendNoActionTitle(action);
+      const div = document.createElement('div');
+      div.className = 'night-action-desc';
+      div.textContent = role === 'werewolf'
+        ? '初日の夜は襲撃を行いません。静かに夜を過ごしてください。'
+        : '初日の夜はまだ守るべき情報がありません。次の夜から護衛してください。';
+      action.appendChild(div);
+      ui.nightAction = { type: 'sleep', targetUid: null };
+      if (readyBtn) {
+        readyBtn.hidden = false;
+        readyBtn.disabled = false;
+        readyBtn.textContent = '確認して夜を進める';
+      }
+      return;
+    }
     if (role === 'werewolf') {
       renderWerewolfNight(action, status, readyBtn, day, me);
     } else if (role === 'seer') {
