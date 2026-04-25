@@ -931,8 +931,11 @@
      ============================================================ */
   function waitForHumanNightActions() {
     return new Promise(async (resolve) => {
+      // 全ての生存している人間プレイヤーから夜アクション送信を待つ。
+      // 行動のない役職 (村人/霊媒師) も「確認」を押して sleep アクションを送信することで、
+      // 夜の所要時間からの役職推理を防ぐ。
       const livingHumans = humanPlayers().filter(p => p.alive);
-      const needed = livingHumans.filter(p => ['werewolf', 'seer', 'knight'].includes(p.role));
+      const needed = livingHumans;
       if (needed.length === 0) { resolve(); return; }
 
       if (state.mode === 'solo') {
@@ -1072,12 +1075,14 @@
      議論フェーズ
      ============================================================ */
   async function runDiscussionPhase() {
-    await setPhase(PHASES.DISCUSSION, { day: state.day });
+    // 議論開始時刻を共有 (全プレイヤーがこれを起点に同じローカルタイマーを動かす)
+    const discussionStartedAt = Date.now();
+    await setPhase(PHASES.DISCUSSION, { day: state.day, discussionStartedAt });
 
     const me = self();
     const isAlive = me ? me.alive : false;
     const totalSec = isAlive ? CONFIG.DISCUSSION_TIME_SEC : CONFIG.DISCUSSION_TIME_DEAD_SEC;
-    state.discussionEndsAt = Date.now() + totalSec * 1000;
+    state.discussionEndsAt = discussionStartedAt + totalSec * 1000;
 
     if (state.discussionTimerId) clearInterval(state.discussionTimerId);
 
@@ -1338,7 +1343,12 @@
     emit('onHistoryUpdate', state.history);
     emit('onPlayersUpdate', state.players);
 
-    await GD.sleep(CONFIG.EXECUTION_WAIT_MS);
+    // 全プレイヤーが「確認」を押すまで進めない
+    if (state.mode === 'multi') {
+      await waitAllHumansReady('execution_d' + state.day);
+    } else {
+      await waitLocalReady('execution_d' + state.day);
+    }
   }
 
   /* ============================================================

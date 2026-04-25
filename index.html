@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/main.css?v=11">
+<link rel="stylesheet" href="css/main.css?v=12">
 </head>
 <body>
 <div id="app">
@@ -164,6 +164,10 @@
     </div>
     <div class="night-action" id="nightAction"></div>
     <p class="night-status" id="nightStatus"></p>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-night" id="readyNightBtn" hidden>確認</button>
+    </div>
+    <div class="ready-status" id="nightReady"></div>
   </section>
 
   <!-- ============ Morning ============ -->
@@ -234,6 +238,10 @@
     <div class="vote-summary" id="voteSummary"></div>
     <div class="execution-result" id="executionResult"></div>
     <p class="execution-status" id="executionStatus"></p>
+    <div class="actions">
+      <button class="btn btn-primary w-full" data-action="ready-execution" id="readyExecutionBtn">確認して進む</button>
+    </div>
+    <div class="ready-status" id="executionReady"></div>
   </section>
 
   <!-- ============ Result ============ -->
@@ -249,6 +257,16 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ AI Profile Modal ============ -->
+  <div class="overlay" id="aiProfileModal" hidden>
+    <div class="dialog ai-profile-dialog">
+      <div id="aiProfileBody"></div>
+      <div class="actions">
+        <button class="btn btn-primary w-full" data-action="close-ai-profile">閉じる</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ Thought Log ============ -->
   <section class="screen" data-screen="thought-log" hidden>
@@ -319,10 +337,10 @@
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 
-<script src="js/gameData.js?v=11"></script>
-<script src="js/ai.js?v=11"></script>
-<script src="js/firebase.js?v=11"></script>
-<script src="js/game.js?v=11"></script>
-<script src="js/main.js?v=11"></script>
+<script src="js/gameData.js?v=12"></script>
+<script src="js/ai.js?v=12"></script>
+<script src="js/firebase.js?v=12"></script>
+<script src="js/game.js?v=12"></script>
+<script src="js/main.js?v=12"></script>
 </body>
 </html>

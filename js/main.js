@@ -21,7 +21,10 @@
     sentMessages: [],          // [{ targetName, text }]
     morningSpeechesShown: 0,
     cleanupLobby: null,
-    discussionScrollPinned: true
+    discussionScrollPinned: true,
+    readyListenerCleanup: null,    // 現在のフェーズの ready 購読解除関数
+    readyListenerKey: null,
+    discussionTickerId: null
   };
 
   /* ============================================================
@@ -353,6 +356,25 @@
     if (interactivePhases.includes(phase)) {
       showLoading(null);
     }
+    // ready リスナーは前フェーズのものを必ず解除
+    detachReadyListener();
+    // 議論タイマーは DISCUSSION 以外で停止
+    if (phase !== PHASES.DISCUSSION) stopDiscussionTimer();
+
+    // 全プレイヤー向けに ready 状況を購読
+    const day = (data && data.day) || Game.state.day;
+    const t = readyTargetForPhase(phase, day);
+    if (t && t.el) {
+      t.el.textContent = '';
+      t.el.classList.remove('complete');
+      attachReadyListener(t.key, t.el);
+    }
+
+    // DISCUSSION 入場時、全クライアントでローカルタイマー開始
+    if (phase === PHASES.DISCUSSION) {
+      startDiscussionTimer(data && data.discussionStartedAt);
+    }
+
     switch (phase) {
       case PHASES.CHARACTERS:
         renderCharacters();
@@ -413,6 +435,96 @@
     t.classList.remove('warning', 'danger');
     if (left <= 10) t.classList.add('danger');
     else if (left <= 30) t.classList.add('warning');
+  }
+
+  /* ============================================================
+     議論タイマー (全プレイヤー共通のローカルカウントダウン)
+     ============================================================ */
+  function startDiscussionTimer(startedAt) {
+    stopDiscussionTimer();
+    if (!startedAt) startedAt = Date.now();
+    const me = Game.self();
+    const isAlive = me ? me.alive : false;
+    const totalSec = isAlive ? CONFIG.DISCUSSION_TIME_SEC : CONFIG.DISCUSSION_TIME_DEAD_SEC;
+    const endsAt = startedAt + totalSec * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      handleTimerTick(left);
+      if (left <= 0) stopDiscussionTimer();
+    };
+    tick();
+    ui.discussionTickerId = setInterval(tick, 250);
+  }
+  function stopDiscussionTimer() {
+    if (ui.discussionTickerId) {
+      clearInterval(ui.discussionTickerId);
+      ui.discussionTickerId = null;
+    }
+  }
+
+  /* ============================================================
+     全プレイヤーの ready 状況購読 (1/2 表示)
+     ============================================================ */
+  function attachReadyListener(phaseKey, target) {
+    detachReadyListener();
+    if (!phaseKey || !target) return;
+    if (Game.state.mode !== 'multi') return;
+    const expectedUids = Game.humanPlayers().filter(p => p.alive).map(p => p.uid);
+    const total = expectedUids.length;
+    if (total === 0) return;
+    try {
+      ui.readyListenerKey = phaseKey;
+      ui.readyListenerCleanup = FB.listenReady(phaseKey, (readyUids) => {
+        const done = readyUids.filter(u => expectedUids.includes(u)).length;
+        target.textContent = `準備完了: ${done}/${total}`;
+        target.classList.toggle('complete', done === total && total > 0);
+      });
+    } catch (e) { console.warn('listenReady failed', e); }
+  }
+  function detachReadyListener() {
+    if (ui.readyListenerCleanup) {
+      try { ui.readyListenerCleanup(); } catch(_) {}
+      ui.readyListenerCleanup = null;
+    }
+    ui.readyListenerKey = null;
+  }
+
+  function readyTargetForPhase(phase, day) {
+    if (phase === PHASES.CHARACTERS) return { key: 'characters', el: $('#charactersReady') };
+    if (phase === PHASES.ROLE) return { key: 'role', el: $('#roleReady') };
+    if (phase === PHASES.NIGHT) return { key: 'night_d' + day, el: $('#nightReady') };
+    if (phase === PHASES.MORNING) return { key: 'morning_d' + day, el: $('#morningReady') };
+    if (phase === PHASES.DISCUSSION) return { key: 'discussion_d' + day, el: $('#discussionReady') };
+    if (phase === PHASES.VOTE) return { key: 'vote_d' + day, el: $('#voteReady') };
+    if (phase === PHASES.EXECUTION) return { key: 'execution_d' + day, el: $('#executionReady') };
+    return null;
+  }
+
+  /* ============================================================
+     AI プロフィールモーダル
+     ============================================================ */
+  function showAiProfile(uid) {
+    const p = Game.findByUid(uid);
+    if (!p || p.kind !== 'ai') return;
+    const c = p.character || {};
+    const tags = (c.personality_tags || []).map(t => `<span class="character-tag">${GD.escapeHtml(t)}</span>`).join('');
+    const body = $('#aiProfileBody');
+    body.innerHTML = `
+      <div class="character-card ai-profile-card">
+        <div class="character-header">
+          <span class="character-name">${GD.escapeHtml(p.displayName)}</span>
+          <span class="character-kind ai">AI</span>
+        </div>
+        <div class="character-meta">${GD.escapeHtml(GD.formatAge(c.age))} / ${GD.escapeHtml(c.occupation || '')}</div>
+        <div class="character-tags">${tags}</div>
+        <div class="character-catchphrase">「${GD.escapeHtml(c.catchphrase || '')}」</div>
+        <div class="character-background">${GD.escapeHtml(c.background || '')}</div>
+        ${p.alive ? '' : '<div class="character-meta" style="margin-top:10px;color:#c0626a;">— 既に亡くなっています —</div>'}
+      </div>`;
+    $('#aiProfileModal').hidden = false;
+  }
+  function closeAiProfile() {
+    $('#aiProfileModal').hidden = true;
   }
 
   function handleSpeechAdded(entry) {
@@ -534,8 +646,14 @@
     const me = Game.self();
     const action = $('#nightAction');
     const status = $('#nightStatus');
+    const readyBtn = $('#readyNightBtn');
     action.innerHTML = '';
     status.textContent = '';
+    if (readyBtn) {
+      readyBtn.hidden = true;
+      readyBtn.disabled = false;
+      readyBtn.textContent = '確認';
+    }
     ui.selectedNightTarget = null;
 
     if (!me || !me.alive) {
@@ -569,6 +687,10 @@
     } else if (role === 'medium') {
       // 前日処刑された人の役職を表示 (Day 2 以降)
       const mr = Game.buildHumanRoleInfo(me.uid).mediumResults || [];
+      const titleEl = document.createElement('div');
+      titleEl.className = 'night-action-title';
+      titleEl.textContent = 'あなたの夜の行動はありません';
+      action.appendChild(titleEl);
       if (mr.length) {
         const last = mr[mr.length - 1];
         const def = ROLES[last.role];
@@ -586,17 +708,28 @@
         div.textContent = '霊媒師は、前日に処刑された者の役職を視ます。(初日はまだ霊視対象がいません)';
         action.appendChild(div);
       }
-      status.textContent = '夜が更けるのを待っています...';
-      // 自動で「アクション完了」とする
-      Game.submitNightAction({ type: 'medium', targetUid: null });
+      // 確認ボタンを表示
+      if (readyBtn) {
+        readyBtn.hidden = false;
+        readyBtn.textContent = '確認して夜を進める';
+      }
+      status.textContent = '';
     } else {
       // villager
+      const titleEl = document.createElement('div');
+      titleEl.className = 'night-action-title';
+      titleEl.textContent = 'あなたの夜の行動はありません';
+      action.appendChild(titleEl);
       const div = document.createElement('div');
       div.className = 'night-action-desc';
       div.textContent = 'あなたは村人です。夜は静かに眠りについてください。';
       action.appendChild(div);
-      status.textContent = '夜が更けるのを待っています...';
-      Game.submitNightAction({ type: 'sleep', targetUid: null });
+      // 確認ボタンを表示
+      if (readyBtn) {
+        readyBtn.hidden = false;
+        readyBtn.textContent = '確認して夜を進める';
+      }
+      status.textContent = '';
     }
   }
 
@@ -647,6 +780,7 @@
         actionType === 'attack' ? '襲撃' : actionType === 'fortune' ? '占い' : '護衛'
       }対象に決定しました。他のプレイヤー / AI を待っています...`;
       await Game.submitNightAction({ type: actionType, targetUid: target.uid, targetName: target.displayName });
+      try { await Game.markReady('night_d' + Game.state.day); } catch(_) {}
     });
     container.appendChild(confirmBtn);
   }
@@ -708,10 +842,16 @@
     const speaker = Game.findByUid(s.uid);
     const dead = speaker && !speaker.alive;
     if (dead) div.classList.add('dead');
-    const meta = (speaker && speaker.kind === 'ai') ? '<span class="speech-speaker-meta">AI</span>' : '';
+    const isAi = speaker && speaker.kind === 'ai';
+    const meta = isAi ? '<span class="speech-speaker-meta">AI</span>' : '';
     div.innerHTML = `
       <div class="speech-speaker">${GD.escapeHtml(s.name)}${meta}</div>
       <div class="speech-text">${GD.escapeHtml(s.speech)}</div>`;
+    if (isAi) {
+      div.classList.add('clickable');
+      div.title = 'タップでプロフィール表示';
+      div.addEventListener('click', () => showAiProfile(s.uid));
+    }
     return div;
   }
 
@@ -757,6 +897,11 @@
       return;
     }
     sel.disabled = false;
+    // 全AIまとめて送信
+    const allOpt = document.createElement('option');
+    allOpt.value = '__all__';
+    allOpt.textContent = `全AI (${ais.length}人) にまとめて送信`;
+    sel.appendChild(allOpt);
     for (const ai of ais) {
       const opt = document.createElement('option');
       opt.value = ai.uid;
@@ -790,6 +935,28 @@
     const text = $('#messageTextInput').value.trim();
     if (!sel.value) { toast('送信先を選んでください'); return; }
     if (!text) { toast('伝言を入力してください'); return; }
+
+    // 全AIへブロードキャスト
+    if (sel.value === '__all__') {
+      const ais = Game.aiPlayers().filter(p => p.alive);
+      if (ais.length === 0) { toast('送信先のAIがいません'); return; }
+      try {
+        for (const ai of ais) {
+          await Game.sendMessageToAi(ai.uid, text);
+        }
+        $('#messageTextInput').value = '';
+        $('#messageCharCount').textContent = '0';
+        const div = document.createElement('div');
+        div.className = 'sent-message';
+        div.innerHTML = `<div class="sent-message-to">→ 全AI (${ais.length}人)</div><div class="sent-message-text">${GD.escapeHtml(text)}</div>`;
+        $('#sentMessages').appendChild(div);
+        toast(`${ais.length}人のAIに送信しました`);
+      } catch (e) {
+        showError(humanizeError(e));
+      }
+      return;
+    }
+
     const target = Game.findByUid(sel.value);
     if (!target) return;
     try {
@@ -908,7 +1075,13 @@
         <div class="execution-result-label">— 処刑なし —</div>
         <div class="execution-result-name">投票が割れた</div>`;
     }
-    $('#executionStatus').textContent = '夜が訪れる...';
+    $('#executionStatus').textContent = '';
+    const btn = $('#readyExecutionBtn');
+    if (btn) {
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.textContent = '確認して進む';
+    }
   }
 
   /* ============================================================
@@ -1086,6 +1259,27 @@
           break;
         case 'close-error':
           closeError();
+          break;
+        case 'ready-night': {
+          // 村人/霊媒師が「確認して夜を進める」を押した
+          target.disabled = true;
+          $('#nightStatus').textContent = '確認しました。他のプレイヤー / AI を待っています...';
+          const me = Game.self();
+          if (me && me.alive) {
+            const role = me.role;
+            const actType = role === 'medium' ? 'medium' : 'sleep';
+            try { await Game.submitNightAction({ type: actType, targetUid: null }); } catch(_) {}
+          }
+          try { await Game.markReady('night_d' + Game.state.day); } catch(_) {}
+          break;
+        }
+        case 'ready-execution':
+          $('#executionReady').textContent = '準備完了 ✓';
+          target.disabled = true;
+          await Game.markReady('execution_d' + Game.state.day);
+          break;
+        case 'close-ai-profile':
+          closeAiProfile();
           break;
       }
     });

@@ -569,6 +569,11 @@ textarea { resize: vertical; min-height: 60px; }
   color: var(--color-error);
 }
 .speech-bubble.self { border-left-color: var(--color-gold-dim); }
+.speech-bubble.clickable { cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.speech-bubble.clickable:hover { background: rgba(255, 255, 255, 0.04); }
+.speech-bubble.clickable:active { transform: scale(0.99); }
+.ai-profile-dialog { max-width: 480px; }
+.ai-profile-card { background: transparent; border: none; padding: 0; }
 .speech-speaker {
   font-size: 13px; color: var(--color-gold);
   font-weight: 600; margin-bottom: 4px;
