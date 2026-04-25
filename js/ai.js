@@ -296,8 +296,8 @@
       if (mr.length) {
         lines.push('【あなたの霊媒結果履歴】');
         for (const r of mr) {
-          const roleName = ROLES[r.role]?.name || r.role;
-          lines.push(`  Day${r.day} 処刑: ${r.name} の役職は ${roleName} だった`);
+          const verdict = (r.role === 'werewolf') ? '人狼(黒)' : '村人(白)';
+          lines.push(`  Day${r.day} 処刑: ${r.name} は ${verdict} だった`);
         }
       } else {
         lines.push('【あなたの霊媒結果履歴】(まだない)');

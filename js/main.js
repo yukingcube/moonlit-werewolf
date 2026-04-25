@@ -720,19 +720,19 @@
       appendNoActionTitle(action);
       if (mr.length) {
         const last = mr[mr.length - 1];
-        const def = ROLES[last.role];
+        const isWolf = (last.role === 'werewolf');
         const div = document.createElement('div');
         div.className = 'medium-result';
         div.innerHTML = `
           <div class="medium-result-name">処刑者: ${GD.escapeHtml(last.name)}</div>
-          <div class="medium-result-role ${last.role === 'werewolf' ? 'werewolf' : ''}">
-            → 役職: ${def ? def.name : last.role}
+          <div class="medium-result-role ${isWolf ? 'werewolf' : ''}">
+            → ${isWolf ? '人狼(黒)' : '村人(白)'}
           </div>`;
         action.appendChild(div);
       } else {
         const div = document.createElement('div');
         div.className = 'night-action-desc';
-        div.textContent = '霊媒師は、前日に処刑された者の役職を視ます。(初日はまだ霊視対象がいません)';
+        div.textContent = '霊媒師は、前日に処刑された者が村人陣営か人狼陣営かを視ます。(初日はまだ霊視対象がいません)';
         action.appendChild(div);
       }
       ui.nightAction = { type: 'medium', targetUid: null };
@@ -815,12 +815,15 @@
       if (ui.nightSubmitted) return; // 自分が既に送信済みなら何もしない
 
       // 自分以外の人狼で attack 完了している最も早いプレイヤーを探す
+      // ゲスト視点では他者の role が無いため teammateNames で照合する
       let earliest = null;
       for (const [uid, act] of Object.entries(acts || {})) {
         if (uid === me.uid) continue;
         if (!act || act.type !== 'attack' || !act.targetUid) continue;
         const p = Game.findByUid(uid);
-        if (!p || p.role !== 'werewolf') continue;
+        if (!p) continue;
+        const isTeammate = (p.role === 'werewolf') || teammateNames.includes(p.displayName);
+        if (!isTeammate) continue;
         if (!earliest || (act.at || 0) < (earliest.at || 0)) {
           earliest = { uid, at: act.at, targetUid: act.targetUid, targetName: act.targetName, byName: p.displayName };
         }

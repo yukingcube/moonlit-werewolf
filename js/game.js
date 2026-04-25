@@ -831,13 +831,19 @@
           const target = findByUid(act.targetUid);
           if (!seer || seer.role !== 'seer' || !target) continue;
           handled.add(uid);
+          const fr = {
+            day: state.day,
+            targetUid: target.uid,
+            targetName: target.displayName,
+            isWerewolf: (target.role === 'werewolf')
+          };
+          // ホスト自身が占い師のケースに備えてローカル history も即時更新
+          const hist = ensureHistoryDay();
+          hist.fortuneResultsBy = hist.fortuneResultsBy || {};
+          hist.fortuneResultsBy[uid] = fr;
+          emit('onHistoryUpdate', state.history);
           try {
-            await FB.setDayFortune(state.day, uid, {
-              day: state.day,
-              targetUid: target.uid,
-              targetName: target.displayName,
-              isWerewolf: (target.role === 'werewolf')
-            });
+            await FB.setDayFortune(state.day, uid, fr);
           } catch (e) { console.warn('early fortune resolve failed', e); }
         }
       });
