@@ -303,8 +303,34 @@
       onResult: handleResult,
       onWaitProgress: handleWaitProgress,
       onRoleAssigned: handleRoleAssigned,
-      onLoading: (msg, sub) => showLoading(msg, sub)
+      onLoading: (msg, sub) => showLoading(msg, sub),
+      onMorningProgress: handleMorningProgress,
+      onMorningComplete: handleMorningComplete
     });
+  }
+
+  function handleMorningProgress(p) {
+    if (ui.currentScreen !== 'morning') return;
+    const status = $('#morningReady');
+    if (status) {
+      status.textContent = `AIが発言中... ${p.current}/${p.total}`;
+    }
+    const btn = $('#readyMorningBtn');
+    if (btn) {
+      btn.hidden = true;
+      btn.disabled = true;
+    }
+  }
+
+  function handleMorningComplete() {
+    if (ui.currentScreen !== 'morning') return;
+    const btn = $('#readyMorningBtn');
+    if (btn) {
+      btn.hidden = false;
+      btn.disabled = false;
+    }
+    const status = $('#morningReady');
+    if (status) status.textContent = '';
   }
 
   /* ============================================================
@@ -649,9 +675,11 @@
     }
     ui.morningSpeechesShown = 0;
     renderMorningSpeeches();
-    $('#readyMorningBtn').hidden = false;
-    $('#readyMorningBtn').disabled = false;
-    $('#morningReady').textContent = '';
+    const morningComplete = !!(data && data.morningComplete);
+    const btn = $('#readyMorningBtn');
+    btn.hidden = !morningComplete;
+    btn.disabled = !morningComplete;
+    $('#morningReady').textContent = morningComplete ? '' : 'AIが発言中...';
   }
 
   function renderMorningSpeeches() {

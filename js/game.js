@@ -480,6 +480,7 @@
     if (typeof g.phaseVersion === 'number' && g.phaseVersion <= state.phaseVersion) return;
     state.phaseVersion = g.phaseVersion || 0;
     const oldPhase = state.phase;
+    const oldMorningComplete = !!(state.phaseData && state.phaseData.morningComplete);
     state.phase = g.phase || state.phase;
     state.phaseData = g.phaseData || null;
 
@@ -508,6 +509,10 @@
     emit('onHistoryUpdate', state.history);
     if (oldPhase !== state.phase) {
       emit('onPhaseChange', state.phase, state.phaseData || null);
+    }
+    const newMorningComplete = !!(state.phaseData && state.phaseData.morningComplete);
+    if (state.phase === PHASES.MORNING && newMorningComplete && !oldMorningComplete) {
+      emit('onMorningComplete');
     }
     if (g.result) emit('onResult', g.result);
   }
@@ -884,13 +889,15 @@
      朝フェーズ
      ============================================================ */
   async function runMorningPhase() {
-    await setPhase(PHASES.MORNING, { day: state.day });
+    await setPhase(PHASES.MORNING, { day: state.day, morningComplete: false });
 
     const hist = state.history.find(h => h.day === state.day);
     const morningSpeeches = hist.morningSpeeches = [];
 
     // 生存者の発言 (人間は発言しない、AIのみ)
     const livingAis = aiPlayers().filter(p => p.alive);
+    const expectedCount = livingAis.length;
+    emit('onMorningProgress', { current: 0, total: expectedCount });
     for (const ai of livingAis) {
       const ctx = buildCtx(ai);
       try {
@@ -907,8 +914,9 @@
         recordThought(ai.uid, state.day, 'morning', res.thought);
         emit('onSpeechAdded', entry);
         emit('onHistoryUpdate', state.history);
+        emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
         if (state.mode === 'multi' && state.isHost) {
-          await transitionMultiPhase(PHASES.MORNING, { day: state.day });
+          await transitionMultiPhase(PHASES.MORNING, { day: state.day, morningComplete: false });
         }
       } catch (err) {
         console.warn('morning speech error', ai.displayName, err);
@@ -922,15 +930,20 @@
         morningSpeeches.push(entry);
         emit('onSpeechAdded', entry);
         emit('onHistoryUpdate', state.history);
+        emit('onMorningProgress', { current: morningSpeeches.length, total: expectedCount });
         if (state.mode === 'multi' && state.isHost) {
-          await transitionMultiPhase(PHASES.MORNING, { day: state.day });
+          await transitionMultiPhase(PHASES.MORNING, { day: state.day, morningComplete: false });
         }
       }
     }
 
-    // 朝の表示完了 → 議論ボタン待ち
+    // 朝の発言完了 → 全員に通知 → 議論ボタン待ち
+    if (state.mode === 'multi' && state.isHost) {
+      await transitionMultiPhase(PHASES.MORNING, { day: state.day, morningComplete: true });
+    }
+    emit('onMorningComplete');
+
     if (state.mode === 'multi') {
-      // ローディングは出さない (画面の ready-status に任せる)
       await waitAllHumansReady('morning_d' + state.day);
     } else {
       await waitLocalReady('morning_d' + state.day);
