@@ -410,7 +410,13 @@
   async function submitNightAction(day, action) {
     assertInRoom();
     const F = fb();
-    await F.set(F.ref(F.db, `rooms/${state.roomId}/nightActions/day${day}/${state.uid}`), action);
+    const payload = { ...action, at: Date.now() };
+    await F.set(F.ref(F.db, `rooms/${state.roomId}/nightActions/day${day}/${state.uid}`), payload);
+  }
+
+  function listenNightActions(day, cb) {
+    assertInRoom();
+    return attach(`rooms/${state.roomId}/nightActions/day${day}`, (val) => cb(val || {}));
   }
 
   async function getAllNightActions(day) {
@@ -444,7 +450,7 @@
     submitMessage, getAllMessages,
     setDayNightResults, pushDayMorningSpeech, setDayFortune, setDayVotes, setDayExecution,
     listenDayHistory, clearDayHistory,
-    submitNightAction, getAllNightActions,
+    submitNightAction, getAllNightActions, listenNightActions,
     detachAll, reset
   };
 })();

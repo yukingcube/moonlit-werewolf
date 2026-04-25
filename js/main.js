@@ -640,7 +640,15 @@
   /* ============================================================
      夜画面
      ============================================================ */
+  function detachNightActionsListener() {
+    if (ui.nightActionsCleanup) {
+      try { ui.nightActionsCleanup(); } catch(_) {}
+      ui.nightActionsCleanup = null;
+    }
+  }
+
   function renderNight(data) {
+    detachNightActionsListener();
     const day = (data && data.day) || Game.state.day;
     $('#nightDayLabel').textContent = `DAY ${day}`;
     const me = Game.self();
@@ -651,10 +659,12 @@
     status.textContent = '';
     if (readyBtn) {
       readyBtn.hidden = true;
-      readyBtn.disabled = false;
-      readyBtn.textContent = '確認';
+      readyBtn.disabled = true;
+      readyBtn.textContent = '決定';
     }
     ui.selectedNightTarget = null;
+    ui.nightAction = null;
+    ui.nightSubmitted = false;
 
     if (!me || !me.alive) {
       status.textContent = '(あなたは亡くなっています。夜を見守ります...)';
@@ -663,12 +673,8 @@
 
     const role = me.role;
     if (role === 'werewolf') {
-      renderNightTargets(action, '襲撃する相手を選べ', '人狼として、村人を1人襲撃します', (cands) => {
-        const teammateNames = (Game.buildHumanRoleInfo(me.uid).teammateNames) || [];
-        return cands.filter(p => !teammateNames.includes(p.displayName));
-      }, 'attack');
+      renderWerewolfNight(action, status, readyBtn, day, me);
     } else if (role === 'seer') {
-      // 既出の占い結果を表示
       const past = Game.buildHumanRoleInfo(me.uid).fortuneResults || [];
       if (past.length) {
         const last = past[past.length - 1];
@@ -681,16 +687,12 @@
           </div>`;
         action.appendChild(div);
       }
-      renderNightTargets(action, '占う相手を選べ', '占い師として、相手の正体を見抜きます', (c) => c, 'fortune');
+      renderNightTargets(action, '占う相手を選べ', '占い師として、相手の正体を見抜きます', (c) => c, 'fortune', readyBtn);
     } else if (role === 'knight') {
-      renderNightTargets(action, '護衛する相手を選べ', '騎士として、人狼の襲撃から1人を守ります', (c) => c, 'guard');
+      renderNightTargets(action, '護衛する相手を選べ', '騎士として、人狼の襲撃から1人を守ります', (c) => c, 'guard', readyBtn);
     } else if (role === 'medium') {
-      // 前日処刑された人の役職を表示 (Day 2 以降)
       const mr = Game.buildHumanRoleInfo(me.uid).mediumResults || [];
-      const titleEl = document.createElement('div');
-      titleEl.className = 'night-action-title';
-      titleEl.textContent = 'あなたの夜の行動はありません';
-      action.appendChild(titleEl);
+      appendNoActionTitle(action);
       if (mr.length) {
         const last = mr[mr.length - 1];
         const def = ROLES[last.role];
@@ -708,32 +710,85 @@
         div.textContent = '霊媒師は、前日に処刑された者の役職を視ます。(初日はまだ霊視対象がいません)';
         action.appendChild(div);
       }
-      // 確認ボタンを表示
+      ui.nightAction = { type: 'medium', targetUid: null };
       if (readyBtn) {
         readyBtn.hidden = false;
+        readyBtn.disabled = false;
         readyBtn.textContent = '確認して夜を進める';
       }
-      status.textContent = '';
     } else {
       // villager
-      const titleEl = document.createElement('div');
-      titleEl.className = 'night-action-title';
-      titleEl.textContent = 'あなたの夜の行動はありません';
-      action.appendChild(titleEl);
+      appendNoActionTitle(action);
       const div = document.createElement('div');
       div.className = 'night-action-desc';
       div.textContent = 'あなたは村人です。夜は静かに眠りについてください。';
       action.appendChild(div);
-      // 確認ボタンを表示
+      ui.nightAction = { type: 'sleep', targetUid: null };
       if (readyBtn) {
         readyBtn.hidden = false;
+        readyBtn.disabled = false;
         readyBtn.textContent = '確認して夜を進める';
       }
-      status.textContent = '';
     }
   }
 
-  function renderNightTargets(container, title, desc, filterFn, actionType) {
+  function appendNoActionTitle(container) {
+    const titleEl = document.createElement('div');
+    titleEl.className = 'night-action-title';
+    titleEl.textContent = 'あなたの夜の行動はありません';
+    container.appendChild(titleEl);
+  }
+
+  // 人狼夜画面: 自分が「最初」なら通常選択 UI、相方が先に決めていたら確認のみ
+  function renderWerewolfNight(action, status, readyBtn, day, me) {
+    // 通常の選択 UI を最初に表示
+    const teammateNames = (Game.buildHumanRoleInfo(me.uid).teammateNames) || [];
+    renderNightTargets(action, '襲撃する相手を選べ', '人狼として、村人を1人襲撃します', (cands) => {
+      return cands.filter(p => !teammateNames.includes(p.displayName));
+    }, 'attack', readyBtn);
+
+    if (Game.state.mode !== 'multi') return;
+
+    // 相方の先行決定を listen して、UI を切り替える
+    ui.nightActionsCleanup = FB.listenNightActions(day, (acts) => {
+      if (ui.nightSubmitted) return; // 自分が既に送信済みなら何もしない
+
+      // 自分以外の人狼で attack 完了している最も早いプレイヤーを探す
+      let earliest = null;
+      for (const [uid, act] of Object.entries(acts || {})) {
+        if (uid === me.uid) continue;
+        if (!act || act.type !== 'attack' || !act.targetUid) continue;
+        const p = Game.findByUid(uid);
+        if (!p || p.role !== 'werewolf') continue;
+        if (!earliest || (act.at || 0) < (earliest.at || 0)) {
+          earliest = { uid, at: act.at, targetUid: act.targetUid, targetName: act.targetName, byName: p.displayName };
+        }
+      }
+      if (!earliest) return;
+
+      // 既に決定済み: UI を切り替え
+      const target = Game.findByUid(earliest.targetUid);
+      action.innerHTML = '';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'night-action-title';
+      titleEl.textContent = '襲撃は決定済みです';
+      action.appendChild(titleEl);
+      const desc = document.createElement('div');
+      desc.className = 'night-action-desc';
+      desc.innerHTML = `もうひとりの人狼 (${GD.escapeHtml(earliest.byName)}) によって襲撃は完了しています。<br>` +
+        `襲撃対象: <strong>${GD.escapeHtml(target ? target.displayName : earliest.targetName || '?')}</strong>`;
+      action.appendChild(desc);
+      ui.nightAction = { type: 'attack', targetUid: earliest.targetUid, targetName: earliest.targetName };
+      if (readyBtn) {
+        readyBtn.hidden = false;
+        readyBtn.disabled = false;
+        readyBtn.textContent = '確認';
+      }
+      detachNightActionsListener();
+    });
+  }
+
+  function renderNightTargets(container, title, desc, filterFn, actionType, readyBtn) {
     const titleEl = document.createElement('div');
     titleEl.className = 'night-action-title';
     titleEl.textContent = title;
@@ -758,31 +813,17 @@
         $$('.target-btn', grid).forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         ui.selectedNightTarget = p.uid;
+        ui.nightAction = { type: actionType, targetUid: p.uid, targetName: p.displayName };
+        if (readyBtn) {
+          readyBtn.hidden = false;
+          readyBtn.disabled = false;
+          readyBtn.textContent = actionType === 'attack' ? '襲撃を決定' :
+                                  actionType === 'fortune' ? '占いを決定' : '護衛を決定';
+        }
       });
       grid.appendChild(btn);
     }
     container.appendChild(grid);
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.className = 'btn btn-primary w-full';
-    confirmBtn.style.marginTop = '20px';
-    confirmBtn.textContent = '決定';
-    confirmBtn.addEventListener('click', async () => {
-      if (!ui.selectedNightTarget) {
-        toast('対象を選んでください');
-        return;
-      }
-      const target = Game.findByUid(ui.selectedNightTarget);
-      if (!target) return;
-      confirmBtn.disabled = true;
-      $$('.target-btn', grid).forEach(b => b.disabled = true);
-      $('#nightStatus').textContent = `${target.displayName} を ${
-        actionType === 'attack' ? '襲撃' : actionType === 'fortune' ? '占い' : '護衛'
-      }対象に決定しました。他のプレイヤー / AI を待っています...`;
-      await Game.submitNightAction({ type: actionType, targetUid: target.uid, targetName: target.displayName });
-      try { await Game.markReady('night_d' + Game.state.day); } catch(_) {}
-    });
-    container.appendChild(confirmBtn);
   }
 
   /* ============================================================
@@ -1261,15 +1302,12 @@
           closeError();
           break;
         case 'ready-night': {
-          // 村人/霊媒師が「確認して夜を進める」を押した
+          if (!ui.nightAction) { toast('対象を選んでください'); return; }
           target.disabled = true;
+          ui.nightSubmitted = true;
+          detachNightActionsListener();
           $('#nightStatus').textContent = '確認しました。他のプレイヤー / AI を待っています...';
-          const me = Game.self();
-          if (me && me.alive) {
-            const role = me.role;
-            const actType = role === 'medium' ? 'medium' : 'sleep';
-            try { await Game.submitNightAction({ type: actType, targetUid: null }); } catch(_) {}
-          }
+          try { await Game.submitNightAction(ui.nightAction); } catch(_) {}
           try { await Game.markReady('night_d' + Game.state.day); } catch(_) {}
           break;
         }

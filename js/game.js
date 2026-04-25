@@ -841,17 +841,27 @@
       }
     }
 
-    // 襲撃判定 (人狼の attack を集計、最多をターゲット)
-    const attackVotes = {};
+    // 襲撃判定: 人間の人狼が決めていればそれが最優先 (早い者勝ち)
+    const wolfActs = [];
     for (const [uid, act] of Object.entries(allActions)) {
-      if (act.type === 'attack' && act.targetUid) {
-        attackVotes[act.targetUid] = (attackVotes[act.targetUid] || 0) + 1;
-      }
+      if (act.type !== 'attack' || !act.targetUid) continue;
+      const p = findByUid(uid);
+      if (!p || p.role !== 'werewolf') continue;
+      wolfActs.push({ uid, kind: p.kind, at: act.at || 0, targetUid: act.targetUid });
     }
+    const humanWolfActs = wolfActs.filter(a => a.kind === 'human').sort((a, b) => a.at - b.at);
     let attackTargetUid = null;
-    let maxV = 0;
-    for (const [uid, v] of Object.entries(attackVotes)) {
-      if (v > maxV) { maxV = v; attackTargetUid = uid; }
+    if (humanWolfActs.length > 0) {
+      attackTargetUid = humanWolfActs[0].targetUid;
+    } else {
+      const attackVotes = {};
+      for (const a of wolfActs) {
+        attackVotes[a.targetUid] = (attackVotes[a.targetUid] || 0) + 1;
+      }
+      let maxV = 0;
+      for (const [uid, v] of Object.entries(attackVotes)) {
+        if (v > maxV) { maxV = v; attackTargetUid = uid; }
+      }
     }
 
     // 騎士護衛
