@@ -479,6 +479,7 @@
   function handleGameUpdate(g) {
     if (typeof g.phaseVersion === 'number' && g.phaseVersion <= state.phaseVersion) return;
     state.phaseVersion = g.phaseVersion || 0;
+    const oldPhase = state.phase;
     state.phase = g.phase || state.phase;
     state.phaseData = g.phaseData || null;
 
@@ -505,7 +506,9 @@
 
     emit('onPlayersUpdate', state.players);
     emit('onHistoryUpdate', state.history);
-    emit('onPhaseChange', state.phase, state.phaseData || null);
+    if (oldPhase !== state.phase) {
+      emit('onPhaseChange', state.phase, state.phaseData || null);
+    }
     if (g.result) emit('onResult', g.result);
   }
 
@@ -918,6 +921,10 @@
         };
         morningSpeeches.push(entry);
         emit('onSpeechAdded', entry);
+        emit('onHistoryUpdate', state.history);
+        if (state.mode === 'multi' && state.isHost) {
+          await transitionMultiPhase(PHASES.MORNING, { day: state.day });
+        }
       }
     }
 

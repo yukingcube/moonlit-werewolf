@@ -311,6 +311,16 @@
      フェーズ変更ハンドラ
      ============================================================ */
   function handlePhaseChange(phase, data) {
+    // インタラクティブな画面に遷移した瞬間、念のためローディングを閉じる
+    // (ボタンが押せなくなる事故防止)
+    const interactivePhases = [
+      PHASES.CHARACTERS, PHASES.ROLE, PHASES.NIGHT,
+      PHASES.MORNING, PHASES.DISCUSSION, PHASES.VOTE,
+      PHASES.EXECUTION, PHASES.RESULT
+    ];
+    if (interactivePhases.includes(phase)) {
+      showLoading(null);
+    }
     switch (phase) {
       case PHASES.CHARACTERS:
         renderCharacters();
@@ -640,6 +650,7 @@
     ui.morningSpeechesShown = 0;
     renderMorningSpeeches();
     $('#readyMorningBtn').hidden = false;
+    $('#readyMorningBtn').disabled = false;
     $('#morningReady').textContent = '';
   }
 
@@ -685,6 +696,7 @@
     $('#messageInputArea').hidden = dead;
     $('#spectatorNotice').hidden = !dead;
     $('#readyDiscussionBtn').textContent = dead ? '次へ' : '議論を終えて投票へ';
+    $('#readyDiscussionBtn').disabled = false;
 
     ui.sentMessages = [];
     $('#sentMessages').innerHTML = '';
