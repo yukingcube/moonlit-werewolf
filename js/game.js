@@ -595,9 +595,8 @@
       // 1. キャラ表示
       await setPhase(PHASES.CHARACTERS, { day: 0 });
       if (state.mode === 'multi') {
-        loading('全員の確認を待っています...');
+        // ローディングは出さない。画面上の ready-status に任せる。
         await waitAllHumansReady('characters');
-        loading(null);
       } else {
         await waitLocalReady('characters');
       }
@@ -608,9 +607,7 @@
       const me = self();
       if (me) emit('onRoleAssigned', me.role, buildHumanRoleInfo(me.uid));
       if (state.mode === 'multi') {
-        loading('全員の役職確認を待っています...');
         await waitAllHumansReady('role');
-        loading(null);
       } else {
         await waitLocalReady('role');
       }
@@ -926,10 +923,8 @@
 
     // 朝の表示完了 → 議論ボタン待ち
     if (state.mode === 'multi') {
-      // 全員 ready
-      loading('議論への移行を待っています...');
+      // ローディングは出さない (画面の ready-status に任せる)
       await waitAllHumansReady('morning_d' + state.day);
-      loading(null);
     } else {
       await waitLocalReady('morning_d' + state.day);
     }
