@@ -810,7 +810,32 @@
     // ▼ 人間プレイヤーのアクション待ち
     const humanActionPromise = waitForHumanNightActions();
 
+    // ▼ 早期占い結果リゾルバ (ホスト側): 人間の占い師が submit したらすぐに結果を Firebase へ
+    let earlyFortuneOff = null;
+    if (state.mode === 'multi' && state.isHost) {
+      const handled = new Set();
+      earlyFortuneOff = FB.listenNightActions(state.day, async (data) => {
+        for (const [uid, act] of Object.entries(data || {})) {
+          if (handled.has(uid)) continue;
+          if (!act || act.type !== 'fortune' || !act.targetUid) continue;
+          const seer = findByUid(uid);
+          const target = findByUid(act.targetUid);
+          if (!seer || seer.role !== 'seer' || !target) continue;
+          handled.add(uid);
+          try {
+            await FB.setDayFortune(state.day, uid, {
+              day: state.day,
+              targetUid: target.uid,
+              targetName: target.displayName,
+              isWerewolf: (target.role === 'werewolf')
+            });
+          } catch (e) { console.warn('early fortune resolve failed', e); }
+        }
+      });
+    }
+
     await Promise.all([Promise.all(tasks), humanActionPromise]);
+    if (earlyFortuneOff) { try { earlyFortuneOff(); } catch(_) {} }
 
     // 全アクション収集 → 解決
     const allActions = { ...aiActions };
@@ -1011,6 +1036,21 @@
     state.nightActions[me.uid] = action;
     if (state.mode === 'multi') {
       try { await FB.submitNightAction(state.day, action); } catch(e) { console.warn(e); }
+    }
+    // 占い師の即時結果フィードバック (solo: ローカルで決定; multi: ホストの早期リゾルバが処理)
+    if (state.mode === 'solo' && me.role === 'seer' && action.type === 'fortune' && action.targetUid) {
+      const target = findByUid(action.targetUid);
+      if (target) {
+        const hist = ensureHistoryDay();
+        hist.fortuneResultsBy = hist.fortuneResultsBy || {};
+        hist.fortuneResultsBy[me.uid] = {
+          day: state.day,
+          targetUid: target.uid,
+          targetName: target.displayName,
+          isWerewolf: (target.role === 'werewolf')
+        };
+        emit('onHistoryUpdate', state.history);
+      }
     }
   }
 

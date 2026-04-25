@@ -426,6 +426,9 @@
       // discussion ログには morning の発言を表示する
       renderDiscussionLog();
     }
+    if (ui.currentScreen === 'night' && ui.fortuneAwaiting) {
+      tryShowFortuneResult();
+    }
   }
 
   function handleTimerTick(left) {
@@ -665,6 +668,8 @@
     ui.selectedNightTarget = null;
     ui.nightAction = null;
     ui.nightSubmitted = false;
+    ui.fortuneAwaiting = false;
+    ui.fortuneResultShown = false;
 
     if (!me || !me.alive) {
       status.textContent = '(あなたは亡くなっています。夜を見守ります...)';
@@ -729,6 +734,42 @@
         readyBtn.disabled = false;
         readyBtn.textContent = '確認して夜を進める';
       }
+    }
+  }
+
+  function tryShowFortuneResult() {
+    if (!ui.fortuneAwaiting || ui.fortuneResultShown) return;
+    const me = Game.self();
+    if (!me || me.role !== 'seer') return;
+    const past = Game.buildHumanRoleInfo(me.uid).fortuneResults || [];
+    const last = past.length ? past[past.length - 1] : null;
+    if (!last || last.day !== Game.state.day) return;
+    showFortuneResult(last);
+    ui.fortuneResultShown = true;
+    ui.fortuneAwaiting = false;
+  }
+
+  function showFortuneResult(fr) {
+    const action = $('#nightAction');
+    action.innerHTML = '';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'night-action-title';
+    titleEl.textContent = '占い結果';
+    action.appendChild(titleEl);
+    const div = document.createElement('div');
+    div.className = 'fortune-result';
+    div.innerHTML = `
+      <div class="fortune-result-name">${GD.escapeHtml(fr.targetName)}</div>
+      <div class="fortune-result-verdict ${fr.isWerewolf ? 'werewolf' : 'villager'}">
+        → ${fr.isWerewolf ? '人狼' : '村人(白)'}
+      </div>`;
+    action.appendChild(div);
+    $('#nightStatus').textContent = '結果を確認したら「確認」を押してください。';
+    const readyBtn = $('#readyNightBtn');
+    if (readyBtn) {
+      readyBtn.hidden = false;
+      readyBtn.disabled = false;
+      readyBtn.textContent = '確認';
     }
   }
 
@@ -1303,11 +1344,26 @@
           break;
         case 'ready-night': {
           if (!ui.nightAction) { toast('対象を選んでください'); return; }
+          const meN = Game.self();
+          // 占い師: 結果表示前は markReady を保留し、結果を表示する
+          if (meN && meN.alive && meN.role === 'seer'
+              && ui.nightAction.type === 'fortune' && !ui.fortuneResultShown) {
+            target.disabled = true;
+            ui.nightSubmitted = true;
+            ui.fortuneAwaiting = true;
+            detachNightActionsListener();
+            $('#nightStatus').textContent = '占い中...';
+            try { await Game.submitNightAction(ui.nightAction); } catch(_) {}
+            tryShowFortuneResult();
+            return;
+          }
           target.disabled = true;
-          ui.nightSubmitted = true;
-          detachNightActionsListener();
+          if (!ui.nightSubmitted) {
+            ui.nightSubmitted = true;
+            detachNightActionsListener();
+            try { await Game.submitNightAction(ui.nightAction); } catch(_) {}
+          }
           $('#nightStatus').textContent = '確認しました。他のプレイヤー / AI を待っています...';
-          try { await Game.submitNightAction(ui.nightAction); } catch(_) {}
           try { await Game.markReady('night_d' + Game.state.day); } catch(_) {}
           break;
         }
