@@ -725,6 +725,10 @@
       if (mr.length) {
         const last = mr[mr.length - 1];
         const isWolf = (last.role === 'werewolf');
+        const evImg = document.createElement('div');
+        evImg.className = 'event-image ' + (isWolf ? 'medium-black' : 'medium-white');
+        evImg.setAttribute('aria-hidden', 'true');
+        action.appendChild(evImg);
         const div = document.createElement('div');
         div.className = 'medium-result';
         div.innerHTML = `
@@ -780,6 +784,10 @@
     titleEl.className = 'night-action-title';
     titleEl.textContent = '占い結果';
     action.appendChild(titleEl);
+    const evImg = document.createElement('div');
+    evImg.className = 'event-image ' + (fr.isWerewolf ? 'fortune-black' : 'fortune-white');
+    evImg.setAttribute('aria-hidden', 'true');
+    action.appendChild(evImg);
     const div = document.createElement('div');
     div.className = 'fortune-result';
     div.innerHTML = `
@@ -912,12 +920,14 @@
     } else if (hist.attackedName) {
       ar.className = 'attack-result';
       ar.innerHTML = `
+        <div class="event-image attack" aria-hidden="true"></div>
         <div class="attack-title">— 襲撃 —</div>
         <div class="attack-name">${GD.escapeHtml(hist.attackedName)}</div>
         <div class="attack-desc">人狼に喰い殺された姿で発見された...</div>`;
     } else {
       ar.className = 'attack-result peace';
       ar.innerHTML = `
+        <div class="event-image guard" aria-hidden="true"></div>
         <div class="attack-title">— 静寂の朝 —</div>
         <div class="attack-name">誰も亡くならなかった</div>
         <div class="attack-desc">騎士の加護が村を守ったのかもしれない...</div>`;
@@ -1179,6 +1189,7 @@
     if (data && data.executedName) {
       result.className = 'execution-result';
       result.innerHTML = `
+        <div class="event-image execution" aria-hidden="true"></div>
         <div class="execution-result-label">— 処刑 —</div>
         <div class="execution-result-name">${GD.escapeHtml(data.executedName)}</div>`;
     } else {

@@ -245,7 +245,7 @@ textarea { resize: vertical; min-height: 60px; }
 [data-screen="title"] .moon,
 [data-screen="title"] .main-title,
 [data-screen="title"] .tagline { display: none; }
-.title-container { text-align: center; padding: 30px 20px 20px; min-height: 60vh; display: flex; flex-direction: column; justify-content: flex-end; }
+.title-container { text-align: center; padding: 30px 20px 30px; min-height: 92vh; display: flex; flex-direction: column; justify-content: flex-end; }
 .moon {
   width: 140px; height: 140px; margin: 10px auto 32px; border-radius: 50%;
   background: radial-gradient(circle at 35% 35%,
@@ -422,7 +422,7 @@ textarea { resize: vertical; min-height: 60px; }
 /* ============ Role Card ============ */
 .role-reveal {
   margin: 24px 0; perspective: 1200px;
-  display: flex; justify-content: center;
+  display: flex; flex-direction: column; align-items: center;
 }
 .role-card {
   width: 100%; max-width: 300px; aspect-ratio: 3 / 4.2;
@@ -510,6 +510,22 @@ textarea { resize: vertical; min-height: 60px; }
 .role-reveal:has(.role-card.werewolf) .role-info-below .role-teammates {
   color: var(--color-blood); border-color: var(--color-blood);
 }
+
+/* ============ Event Images ============ */
+.event-image {
+  display: block; width: 100%; max-width: 280px;
+  margin: 0 auto 14px; aspect-ratio: 1 / 1;
+  background-size: cover; background-position: center;
+  border: 1px solid var(--color-border); border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+.event-image.attack       { background-image: url('../assets/images/events/attack.jpg'); border-color: var(--color-blood); }
+.event-image.guard        { background-image: url('../assets/images/events/guard-success.jpg'); border-color: var(--color-gold-dim); }
+.event-image.execution    { background-image: url('../assets/images/events/execution.jpg'); border-color: var(--color-blood); }
+.event-image.fortune-white{ background-image: url('../assets/images/events/fortune-white.jpg'); border-color: var(--color-gold-dim); }
+.event-image.fortune-black{ background-image: url('../assets/images/events/fortune-black.jpg'); border-color: var(--color-blood); }
+.event-image.medium-white { background-image: url('../assets/images/events/medium-white.jpg'); border-color: var(--color-gold-dim); }
+.event-image.medium-black { background-image: url('../assets/images/events/medium-black.jpg'); border-color: var(--color-blood); }
 
 /* ============ Phase Banner ============ */
 .phase-banner {
