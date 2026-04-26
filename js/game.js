@@ -1094,6 +1094,9 @@
     const hist = state.history.find(h => h.day === state.day);
     const morningSpeeches = hist.morningSpeeches = [];
 
+    // 全プレイヤーの伝言を Firebase から取得してマージ (ゲスト送信分も AI に届くように)
+    await syncMessagesFromFirebase([state.day - 1, state.day]);
+
     // 生存者の発言 (人間は発言しない、AIのみ)
     const livingAis = aiPlayers().filter(p => p.alive);
     const expectedCount = livingAis.length;
@@ -1213,6 +1216,36 @@
   /* ============================================================
      伝言送信 (人間 → AI)
      ============================================================ */
+  // マルチ: Firebase 上の伝言(全プレイヤー送信分)をホストの local state にマージする
+  async function syncMessagesFromFirebase(days) {
+    if (state.mode !== 'multi' || !state.isHost) return;
+    const uniqDays = [...new Set(days.filter(d => d != null && d >= 1))];
+    for (const d of uniqDays) {
+      try {
+        const all = await FB.getAllMessages(d);
+        if (!all || !all.length) continue;
+        if (!state.messagesByDay[d]) state.messagesByDay[d] = [];
+        const seen = new Set(state.messagesByDay[d].map(m => m.fromUid + '|' + m.targetUid + '|' + m.text + '|' + (m.at || 0)));
+        for (const m of all) {
+          const fromP = findByUid(m.fromUid);
+          const fromName = fromP ? fromP.displayName : (m.fromName || '');
+          const key = m.fromUid + '|' + m.targetUid + '|' + m.text + '|' + (m.at || 0);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          state.messagesByDay[d].push({
+            fromUid: m.fromUid,
+            fromName,
+            targetUid: m.targetUid,
+            text: m.text,
+            at: m.at || 0
+          });
+        }
+      } catch (e) {
+        console.warn('syncMessagesFromFirebase failed for day', d, e);
+      }
+    }
+  }
+
   async function sendMessageToAi(targetUid, text) {
     text = String(text || '').slice(0, CONFIG.MESSAGE_MAX_LENGTH).trim();
     if (!text) throw new Error('EMPTY_MESSAGE');
@@ -1243,6 +1276,9 @@
   async function runVotePhase() {
     await setPhase(PHASES.VOTE, { day: state.day });
     state.voteSelections = {};
+
+    // 議論中に送られた全プレイヤーの伝言を Firebase から取得してマージ
+    await syncMessagesFromFirebase([state.day - 1, state.day]);
 
     const livingAis = aiPlayers().filter(p => p.alive);
     const livingHumans = humanPlayers().filter(p => p.alive);
