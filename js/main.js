@@ -650,6 +650,8 @@
       grid.appendChild(card);
     }
     $('#charactersReady').textContent = '';
+    const rcBtn = $('#readyCharactersBtn');
+    if (rcBtn) { rcBtn.disabled = false; rcBtn.hidden = false; }
   }
 
   /* ============================================================
@@ -740,7 +742,7 @@
         div.innerHTML = `
           <div class="fortune-result-name">前回占い: ${GD.escapeHtml(last.targetName)}</div>
           <div class="fortune-result-verdict ${last.isWerewolf ? 'werewolf' : 'villager'}">
-            → ${last.isWerewolf ? '人狼' : '村人(白)'}
+            → ${last.isWerewolf ? '人狼陣営(黒)' : '村人陣営(白)'}
           </div>`;
         action.appendChild(div);
       }
@@ -823,7 +825,7 @@
     div.innerHTML = `
       <div class="fortune-result-name">${GD.escapeHtml(fr.targetName)}</div>
       <div class="fortune-result-verdict ${fr.isWerewolf ? 'werewolf' : 'villager'}">
-        → ${fr.isWerewolf ? '人狼' : '村人(白)'}
+        → ${fr.isWerewolf ? '人狼陣営(黒)' : '村人陣営(白)'}
       </div>`;
     action.appendChild(div);
     $('#nightStatus').textContent = '結果を確認したら「確認」を押してください。';

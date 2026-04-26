@@ -1082,9 +1082,11 @@ textarea { resize: vertical; min-height: 60px; }
 /* ============ Overlay ============ */
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(10, 6, 18, 0.88);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
+  background:
+    radial-gradient(ellipse at center, rgba(26, 15, 46, 0.92) 0%, rgba(10, 6, 18, 0.98) 70%),
+    rgba(10, 6, 18, 0.96);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  z-index: 1100;
   display: flex; align-items: center; justify-content: center;
   padding: 20px; animation: fadeIn 0.2s;
 }
