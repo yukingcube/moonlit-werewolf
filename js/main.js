@@ -43,6 +43,34 @@
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
+  const EVENT_DURATIONS = {
+    'attack': 2000, 'guard': 1800,
+    'fortune-white': 2200, 'fortune-black': 2200,
+    'medium-white': 2000, 'medium-black': 2000,
+    'execution': 2500
+  };
+  function playEvent(name) {
+    return new Promise((resolve) => {
+      const ov = $('#eventOverlay');
+      if (!ov || !name) { resolve(); return; }
+      if (ui.eventPlayed && ui.eventPlayed[name + '_' + (Game.state.day || 0)]) {
+        resolve(); return;
+      }
+      ui.eventPlayed = ui.eventPlayed || {};
+      ui.eventPlayed[name + '_' + (Game.state.day || 0)] = true;
+      ov.innerHTML = '<div class="event-overlay-img ' + name + '"></div>';
+      ov.className = 'event-overlay active ev-' + name;
+      ov.hidden = false;
+      const dur = EVENT_DURATIONS[name] || 2000;
+      setTimeout(() => {
+        ov.className = 'event-overlay';
+        ov.hidden = true;
+        ov.innerHTML = '';
+        resolve();
+      }, dur);
+    });
+  }
+
   function showLoading(msg, sub) {
     const ov = $('#loadingOverlay');
     if (msg == null) { ov.hidden = true; return; }
@@ -725,6 +753,7 @@
       if (mr.length) {
         const last = mr[mr.length - 1];
         const isWolf = (last.role === 'werewolf');
+        playEvent(isWolf ? 'medium-black' : 'medium-white');
         const evImg = document.createElement('div');
         evImg.className = 'event-image ' + (isWolf ? 'medium-black' : 'medium-white');
         evImg.setAttribute('aria-hidden', 'true');
@@ -778,6 +807,7 @@
   }
 
   function showFortuneResult(fr) {
+    playEvent(fr.isWerewolf ? 'fortune-black' : 'fortune-white');
     const action = $('#nightAction');
     action.innerHTML = '';
     const titleEl = document.createElement('div');
@@ -924,6 +954,7 @@
         <div class="attack-title">— 襲撃 —</div>
         <div class="attack-name">${GD.escapeHtml(hist.attackedName)}</div>
         <div class="attack-desc">人狼に喰い殺された姿で発見された...</div>`;
+      playEvent('attack');
     } else {
       ar.className = 'attack-result peace';
       ar.innerHTML = `
@@ -931,6 +962,7 @@
         <div class="attack-title">— 静寂の朝 —</div>
         <div class="attack-name">誰も亡くならなかった</div>
         <div class="attack-desc">騎士の加護が村を守ったのかもしれない...</div>`;
+      playEvent('guard');
     }
     ui.morningSpeechesShown = 0;
     renderMorningSpeeches();
@@ -1192,6 +1224,7 @@
         <div class="event-image execution" aria-hidden="true"></div>
         <div class="execution-result-label">— 処刑 —</div>
         <div class="execution-result-name">${GD.escapeHtml(data.executedName)}</div>`;
+      playEvent('execution');
     } else {
       result.className = 'execution-result peace';
       result.innerHTML = `

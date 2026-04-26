@@ -71,9 +71,10 @@ body:has([data-screen="title"]:not([hidden])) .bg-overlay {
   background-image:
     linear-gradient(180deg, rgba(10, 6, 18, 0.0) 0%, rgba(10, 6, 18, 0.85) 100%),
     url('../assets/images/scenes/title.jpg');
-  background-position: top center;
+  background-position: center -8%;
 }
-body:has([data-screen="mode"]:not([hidden])) .bg-overlay {
+body:has([data-screen="mode"]:not([hidden])) .bg-overlay,
+body:has([data-screen="room"]:not([hidden])) .bg-overlay {
   background-image:
     linear-gradient(180deg, rgba(10, 6, 18, 0.55) 0%, rgba(10, 6, 18, 0.92) 100%),
     url('../assets/images/scenes/mode-select.jpg');
@@ -444,6 +445,11 @@ textarea { resize: vertical; min-height: 60px; }
     radial-gradient(circle at center, var(--color-accent-dark) 0%, var(--color-bg-alt) 70%),
     var(--color-bg-alt);
   color: var(--color-gold);
+  transition: visibility 0s linear 0s;
+}
+.role-card.flipped .role-card-back {
+  visibility: hidden;
+  transition: visibility 0s linear 0.45s;
 }
 .role-card-back::before {
   content: '月'; font-size: 100px; font-weight: 400;
@@ -492,6 +498,18 @@ textarea { resize: vertical; min-height: 60px; }
   display: none; text-align: center;
 }
 .role-reveal:has(.role-card.flipped) .role-info-below { display: block; }
+@keyframes roleInfoFadeIn {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes roleInfoGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(155, 109, 211, 0); }
+  50%      { box-shadow: 0 0 18px rgba(155, 109, 211, 0.35); }
+}
+.role-reveal:has(.role-card.flipped) .role-info-below .role-description,
+.role-reveal:has(.role-card.flipped) .role-info-below .role-teammates {
+  animation: roleInfoFadeIn 0.55s ease 0.45s both, roleInfoGlow 3s ease-in-out 1s infinite;
+}
 .role-info-below .role-description {
   font-size: 14px; color: var(--color-text);
   line-height: 1.6; padding: 12px 16px;
@@ -526,6 +544,170 @@ textarea { resize: vertical; min-height: 60px; }
 .event-image.fortune-black{ background-image: url('../assets/images/events/fortune-black.jpg'); border-color: var(--color-blood); }
 .event-image.medium-white { background-image: url('../assets/images/events/medium-white.jpg'); border-color: var(--color-gold-dim); }
 .event-image.medium-black { background-image: url('../assets/images/events/medium-black.jpg'); border-color: var(--color-blood); }
+
+/* ============ Event Overlay (cinematic transitions) ============ */
+.event-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0); pointer-events: none; opacity: 0;
+}
+.event-overlay[hidden] { display: none; }
+.event-overlay.active {
+  pointer-events: auto;
+  animation: eventOverlayFade var(--ev-dur, 2s) ease forwards;
+}
+@keyframes eventOverlayFade {
+  0%   { opacity: 0; background: rgba(0, 0, 0, 0); }
+  12%  { opacity: 1; background: rgba(0, 0, 0, 0.88); }
+  85%  { opacity: 1; background: rgba(0, 0, 0, 0.88); }
+  100% { opacity: 0; background: rgba(0, 0, 0, 0); }
+}
+.event-overlay-img {
+  width: 60vmin; max-width: 480px; aspect-ratio: 1 / 1;
+  background-size: cover; background-position: center;
+  border-radius: 16px;
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.95), 0 12px 40px rgba(0, 0, 0, 0.7);
+  position: relative;
+}
+.event-overlay-img.attack       { background-image: url('../assets/images/events/attack.jpg'); }
+.event-overlay-img.guard        { background-image: url('../assets/images/events/guard-success.jpg'); }
+.event-overlay-img.execution    { background-image: url('../assets/images/events/execution.jpg'); }
+.event-overlay-img.fortune-white{ background-image: url('../assets/images/events/fortune-white.jpg'); }
+.event-overlay-img.fortune-black{ background-image: url('../assets/images/events/fortune-black.jpg'); }
+.event-overlay-img.medium-white { background-image: url('../assets/images/events/medium-white.jpg'); }
+.event-overlay-img.medium-black { background-image: url('../assets/images/events/medium-black.jpg'); }
+
+@keyframes eventEntryBase {
+  0%   { transform: scale(0.6); opacity: 0; }
+  18%  { transform: scale(1.06); opacity: 1; }
+  28%  { transform: scale(1); }
+  82%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.96); opacity: 0; }
+}
+@keyframes eventShake {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -8px 3px; }
+  40% { translate: 6px -4px; }
+  60% { translate: -5px 5px; }
+  80% { translate: 4px -3px; }
+}
+@keyframes eventRotate {
+  0%   { transform: scale(0.5) rotate(-180deg); opacity: 0; }
+  28%  { transform: scale(1.05) rotate(0deg); opacity: 1; }
+  35%  { transform: scale(1) rotate(0deg); }
+  82%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.95) rotate(0deg); opacity: 0; }
+}
+@keyframes eventRise {
+  0%   { transform: translateY(60px) scale(0.7); opacity: 0; }
+  28%  { transform: translateY(0) scale(1); opacity: 1; }
+  82%  { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-30px) scale(1); opacity: 0; }
+}
+@keyframes eventGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 12px rgba(224, 200, 136, 0.4)); }
+  50%      { filter: drop-shadow(0 0 50px rgba(224, 200, 136, 0.85)); }
+}
+@keyframes eventFlash {
+  0%, 4%, 100% { opacity: 0; }
+  6% { opacity: 0.92; }
+  14% { opacity: 0; }
+}
+@keyframes eventSmokeRise {
+  0%   { opacity: 0; transform: translateY(40px) scale(0.7); }
+  30%  { opacity: 0.9; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.4); }
+}
+
+/* default entry */
+.event-overlay.active .event-overlay-img {
+  animation: eventEntryBase var(--ev-dur, 2s) ease forwards;
+}
+
+/* attack: shake + red glow */
+.event-overlay.active.ev-attack { --ev-dur: 2s; }
+.event-overlay.active.ev-attack .event-overlay-img {
+  animation:
+    eventEntryBase 2s ease forwards,
+    eventShake 0.45s ease 0.5s 3;
+  filter: drop-shadow(0 0 36px rgba(169, 50, 50, 0.85));
+}
+
+/* guard: golden halo pulse */
+.event-overlay.active.ev-guard { --ev-dur: 1.8s; }
+.event-overlay.active.ev-guard .event-overlay-img {
+  animation:
+    eventEntryBase 1.8s ease forwards,
+    eventGlowPulse 1.6s ease-in-out 0.2s;
+}
+.event-overlay.active.ev-guard::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at center, rgba(224, 200, 136, 0.32), transparent 55%);
+  animation: eventEntryBase 1.8s ease forwards;
+  pointer-events: none;
+}
+
+/* fortune-white: gentle rotation + soft halo */
+.event-overlay.active.ev-fortune-white { --ev-dur: 2.2s; }
+.event-overlay.active.ev-fortune-white .event-overlay-img {
+  animation: eventRotate 2.2s ease forwards;
+  filter: drop-shadow(0 0 44px rgba(236, 228, 212, 0.65));
+}
+
+/* fortune-black: rotation + dark red shake */
+.event-overlay.active.ev-fortune-black { --ev-dur: 2.2s; }
+.event-overlay.active.ev-fortune-black .event-overlay-img {
+  animation:
+    eventRotate 2.2s ease forwards,
+    eventShake 0.32s ease 0.7s 4;
+  filter: drop-shadow(0 0 44px rgba(107, 15, 26, 0.9));
+}
+
+/* medium-white: rise from below + light streak */
+.event-overlay.active.ev-medium-white { --ev-dur: 2s; }
+.event-overlay.active.ev-medium-white .event-overlay-img {
+  animation: eventRise 2s ease forwards;
+  filter: drop-shadow(0 -16px 44px rgba(236, 228, 212, 0.55));
+}
+
+/* medium-black: rise + black smoke */
+.event-overlay.active.ev-medium-black { --ev-dur: 2s; }
+.event-overlay.active.ev-medium-black .event-overlay-img {
+  animation: eventRise 2s ease forwards;
+  filter: drop-shadow(0 16px 44px rgba(0, 0, 0, 0.95));
+}
+.event-overlay.active.ev-medium-black::after {
+  content: ''; position: absolute;
+  bottom: 0; left: 50%; width: 60vmin; height: 50vmin;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at bottom, rgba(20, 0, 10, 0.7), transparent 65%);
+  animation: eventSmokeRise 2s ease forwards;
+  pointer-events: none;
+}
+
+/* execution: flash + single hard shake */
+.event-overlay.active.ev-execution { --ev-dur: 2.5s; }
+.event-overlay.active.ev-execution .event-overlay-img {
+  animation:
+    eventEntryBase 2.5s ease forwards,
+    eventShake 0.22s ease 0.55s 1;
+  filter: drop-shadow(0 0 36px rgba(0, 0, 0, 0.95));
+}
+.event-overlay.active.ev-execution::before {
+  content: ''; position: fixed; inset: 0;
+  background: white; opacity: 0;
+  animation: eventFlash 2.5s ease forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-overlay.active,
+  .event-overlay.active .event-overlay-img,
+  .event-overlay.active::before,
+  .event-overlay.active::after {
+    animation-duration: 0.4s !important;
+  }
+}
 
 /* ============ Phase Banner ============ */
 .phase-banner {
