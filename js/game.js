@@ -756,6 +756,9 @@
      夜フェーズ
      ============================================================ */
   async function runNightPhase() {
+    if (state.mode === 'multi' && state.isHost) {
+      try { await FB.clearReady('night_d' + state.day); } catch(_) {}
+    }
     await setPhase(PHASES.NIGHT, { day: state.day });
     state.nightActions = {};
 
@@ -952,6 +955,19 @@
 
     emit('onPlayersUpdate', state.players);
     emit('onHistoryUpdate', state.history);
+
+    // 夜の結果(占い結果など)を全人間プレイヤーが確認するまで朝へ進めない
+    if (state.mode === 'multi' && state.isHost) {
+      const aliveHumans = humanPlayers().filter(p => p.alive).map(p => p.uid);
+      if (aliveHumans.length > 0) {
+        await FB.waitAllReady('night_d' + state.day, aliveHumans, {
+          timeoutMs: 0,
+          onProgress: (uids) => emit('onWaitProgress', 'night_d' + state.day, uids, aliveHumans)
+        });
+      }
+    } else if (state.mode === 'solo') {
+      await waitLocalReady('night_d' + state.day);
+    }
   }
 
   function ensureHistoryDay() {
