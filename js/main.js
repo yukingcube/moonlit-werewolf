@@ -575,7 +575,11 @@
       ? `相方の人狼: ${info.teammateNames.join('、')}`
       : '';
     $('#roleTeammates').textContent = tm;
-    $('#roleCard').classList.toggle('werewolf', def.team === 'werewolf');
+    const card = $('#roleCard');
+    ['role-werewolf','role-seer','role-knight','role-medium','role-villager']
+      .forEach(c => card.classList.remove(c));
+    card.classList.add('role-' + role);
+    card.classList.toggle('werewolf', def.team === 'werewolf');
   }
 
   function handleResult(result) {
