@@ -441,21 +441,15 @@ textarea { resize: vertical; min-height: 60px; }
   text-align: center;
 }
 .role-card-back {
-  background:
-    radial-gradient(circle at center, var(--color-accent-dark) 0%, var(--color-bg-alt) 70%),
-    var(--color-bg-alt);
+  background-color: var(--color-bg-alt);
+  background-image: url('../assets/images/roles/back.jpg');
+  background-size: cover; background-position: center;
   color: var(--color-gold);
   transition: visibility 0s linear 0s;
 }
 .role-card.flipped .role-card-back {
   visibility: hidden;
   transition: visibility 0s linear 0.45s;
-}
-.role-card-back::before {
-  content: '月'; font-size: 100px; font-weight: 400;
-  color: rgba(224, 200, 136, 0.15);
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
 }
 .role-card-back-label {
   font-family: var(--font-en); font-size: 12px;
